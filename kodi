@@ -1,0 +1,2058 @@
+<!doctype html>
+<html lang="en" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Edu-GRC - Smart Policy &amp; Compliance Portal</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="/_sdk/element_sdk.js"></script>
+  <script src="/_sdk/data_sdk.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;family=Playfair+Display:wght@600;700&amp;display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#1e3a5f',
+            secondary: '#2d5a87',
+            accent: '#3b82f6',
+            surface: '#f8fafc',
+            text: '#1e293b',
+            success: '#059669',
+            warning: '#d97706',
+            danger: '#dc2626'
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            display: ['Playfair Display', 'serif']
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    html, body { height: 100%; margin: 0; }
+    .app-wrapper { height: 100%; overflow: auto; }
+    .toast { animation: slideIn 0.3s ease-out; }
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn 0.3s ease-out; }
+    .rich-editor { min-height: 300px; }
+    .policy-content { line-height: 1.8; }
+    .policy-content h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 1rem; }
+    .policy-content h2 { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.75rem; }
+    .policy-content p { margin-bottom: 1rem; }
+    .policy-content ul, .policy-content ol { margin-left: 1.5rem; margin-bottom: 1rem; }
+    .policy-content li { margin-bottom: 0.5rem; }
+  </style>
+  <style>body { box-sizing: border-box; }</style>
+ </head>
+ <body class="h-full bg-surface font-sans text-text">
+  <div id="app" class="app-wrapper"></div>
+  <script>
+    // ==========================================
+    // EDU-GRC COMPLIANCE PORTAL - COMPLETE APPLICATION
+    // ==========================================
+
+    // Global State Management
+    const AppState = {
+      currentUser: null,
+      currentView: 'login',
+      users: [],
+      policies: [],
+      policyVersions: [],
+      acknowledgements: [],
+      auditLogs: [],
+      roles: [
+        { id: 'admin', name: 'Administrator', permissions: ['all'] },
+        { id: 'staff', name: 'Staff', permissions: ['view_policies', 'sign_policies'] },
+        { id: 'student', name: 'Student', permissions: ['view_policies', 'sign_policies'] },
+        { id: 'auditor', name: 'Auditor', permissions: ['view_audit', 'export_logs'] }
+      ],
+      config: {
+        institution_name: 'Springfield Academy',
+        portal_title: 'Policy & Compliance Portal'
+      }
+    };
+
+    // Default Config for Element SDK
+    const defaultConfig = {
+      institution_name: 'Springfield Academy',
+      portal_title: 'Policy & Compliance Portal',
+      primary_color: '#1e3a5f',
+      secondary_color: '#f8fafc',
+      text_color: '#1e293b',
+      accent_color: '#3b82f6',
+      surface_color: '#ffffff',
+      font_family: 'Inter'
+    };
+
+    // Utility Functions
+    const Utils = {
+      generateId: () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      
+      formatDate: (dateStr) => {
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('en-US', { 
+          year: 'numeric', 
+          month: 'short', 
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      },
+
+      formatDateShort: (dateStr) => {
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('en-US', { 
+          year: 'numeric', 
+          month: 'short', 
+          day: 'numeric'
+        });
+      },
+
+      hashPassword: async (password) => {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(password + 'edu-grc-salt-2024');
+        const hash = await crypto.subtle.digest('SHA-256', data);
+        return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+      },
+
+      getClientIP: () => {
+        return `192.168.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
+      },
+
+      sanitizeHTML: (str) => {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+      },
+
+      escapeSQL: (str) => {
+        if (typeof str !== 'string') return str;
+        return str.replace(/['";\\]/g, '\\$&');
+      }
+    };
+
+    // JWT Token Simulation
+    const JWT = {
+      sign: (payload) => {
+        const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+        const body = btoa(JSON.stringify({ ...payload, exp: Date.now() + 86400000 }));
+        const signature = btoa(JSON.stringify({ sig: 'simulated' }));
+        return `${header}.${body}.${signature}`;
+      },
+
+      verify: (token) => {
+        try {
+          const [header, body, signature] = token.split('.');
+          const payload = JSON.parse(atob(body));
+          if (payload.exp < Date.now()) return null;
+          return payload;
+        } catch {
+          return null;
+        }
+      }
+    };
+
+    // Audit Logger - Immutable Append-Only
+    const AuditLogger = {
+      log: async (action, entity, entityId, metadata = {}) => {
+        const auditEntry = {
+          id: Utils.generateId(),
+          type: 'audit_log',
+          data: JSON.stringify({
+            userId: AppState.currentUser?.id || 'system',
+            userName: AppState.currentUser?.name || 'System',
+            userRole: AppState.currentUser?.role || 'system',
+            action,
+            entity,
+            entityId,
+            ipAddress: Utils.getClientIP(),
+            userAgent: navigator.userAgent.substring(0, 100),
+            metadata,
+            timestamp: new Date().toISOString()
+          }),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+
+        AppState.auditLogs.push(JSON.parse(auditEntry.data));
+        
+        if (window.dataSdk) {
+          const result = await window.dataSdk.create(auditEntry);
+          if (!result.isOk) {
+            console.error('Failed to persist audit log');
+          }
+        }
+      }
+    };
+
+    // RBAC Authorization
+    const RBAC = {
+      hasPermission: (permission) => {
+        if (!AppState.currentUser) return false;
+        const role = AppState.roles.find(r => r.id === AppState.currentUser.role);
+        if (!role) return false;
+        return role.permissions.includes('all') || role.permissions.includes(permission);
+      },
+
+      canManagePolicies: () => RBAC.hasPermission('all'),
+      canViewPolicies: () => RBAC.hasPermission('all') || RBAC.hasPermission('view_policies'),
+      canSignPolicies: () => RBAC.hasPermission('all') || RBAC.hasPermission('sign_policies'),
+      canViewAudit: () => RBAC.hasPermission('all') || RBAC.hasPermission('view_audit'),
+      canExportLogs: () => RBAC.hasPermission('all') || RBAC.hasPermission('export_logs'),
+      canManageUsers: () => RBAC.hasPermission('all')
+    };
+
+    // Toast Notification System
+    const Toast = {
+      show: (message, type = 'info') => {
+        const container = document.getElementById('toast-container') || (() => {
+          const div = document.createElement('div');
+          div.id = 'toast-container';
+          div.className = 'fixed top-4 right-4 z-50 flex flex-col gap-2';
+          document.body.appendChild(div);
+          return div;
+        })();
+
+        const colors = {
+          success: 'bg-success text-white',
+          error: 'bg-danger text-white',
+          warning: 'bg-warning text-white',
+          info: 'bg-accent text-white'
+        };
+
+        const toast = document.createElement('div');
+        toast.className = `toast px-4 py-3 rounded-lg shadow-lg ${colors[type]} flex items-center gap-2 min-w-[280px]`;
+        toast.innerHTML = `
+          <span class="flex-1">${Utils.sanitizeHTML(message)}</span>
+          <button onclick="this.parentElement.remove()" class="opacity-70 hover:opacity-100">✕</button>
+        `;
+        container.appendChild(toast);
+        setTimeout(() => toast.remove(), 4000);
+      }
+    };
+
+    // Modal System
+    const Modal = {
+      show: (title, content, actions = []) => {
+        const existing = document.getElementById('modal-overlay');
+        if (existing) existing.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'modal-overlay';
+        modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4';
+        modal.innerHTML = `
+          <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90%] overflow-auto fade-in">
+            <div class="p-6 border-b border-gray-200">
+              <h3 class="text-xl font-semibold text-primary">${Utils.sanitizeHTML(title)}</h3>
+            </div>
+            <div class="p-6">${content}</div>
+            <div class="p-4 border-t border-gray-200 flex justify-end gap-3" id="modal-actions"></div>
+          </div>
+        `;
+        document.body.appendChild(modal);
+
+        const actionsContainer = document.getElementById('modal-actions');
+        actions.forEach(action => {
+          const btn = document.createElement('button');
+          btn.className = action.primary 
+            ? 'px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent/90 font-medium'
+            : 'px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium';
+          btn.textContent = action.label;
+          btn.onclick = () => {
+            if (action.onClick) action.onClick();
+            if (action.closeOnClick !== false) Modal.close();
+          };
+          actionsContainer.appendChild(btn);
+        });
+
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) Modal.close();
+        });
+      },
+
+      close: () => {
+        const modal = document.getElementById('modal-overlay');
+        if (modal) modal.remove();
+      }
+    };
+
+    // Data Operations
+    const DataOps = {
+      saveUser: async (user) => {
+        const existing = AppState.users.findIndex(u => u.id === user.id);
+        if (existing >= 0) {
+          AppState.users[existing] = user;
+        } else {
+          AppState.users.push(user);
+        }
+
+        if (window.dataSdk) {
+          const record = {
+            id: user.id,
+            type: 'user',
+            data: JSON.stringify(user),
+            createdAt: user.createdAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          await window.dataSdk.create(record);
+        }
+      },
+
+      savePolicy: async (policy) => {
+        const existing = AppState.policies.findIndex(p => p.id === policy.id);
+        if (existing >= 0) {
+          AppState.policies[existing] = policy;
+        } else {
+          AppState.policies.push(policy);
+        }
+
+        if (window.dataSdk) {
+          const record = {
+            id: policy.id,
+            type: 'policy',
+            data: JSON.stringify(policy),
+            createdAt: policy.createdAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          await window.dataSdk.create(record);
+        }
+      },
+
+      savePolicyVersion: async (version) => {
+        AppState.policyVersions.push(version);
+
+        if (window.dataSdk) {
+          const record = {
+            id: version.id,
+            type: 'policy_version',
+            data: JSON.stringify(version),
+            createdAt: version.createdAt,
+            updatedAt: version.createdAt
+          };
+          await window.dataSdk.create(record);
+        }
+      },
+
+      saveAcknowledgement: async (ack) => {
+        AppState.acknowledgements.push(ack);
+
+        if (window.dataSdk) {
+          const record = {
+            id: ack.id,
+            type: 'acknowledgement',
+            data: JSON.stringify(ack),
+            createdAt: ack.signedAt,
+            updatedAt: ack.signedAt
+          };
+          await window.dataSdk.create(record);
+        }
+      }
+    };
+
+    // ==========================================
+    // VIEWS / COMPONENTS
+    // ==========================================
+
+    // Login View
+    const LoginView = {
+      render: () => {
+        const app = document.getElementById('app');
+        app.innerHTML = `
+          <div class="min-h-full bg-gradient-to-br from-primary via-secondary to-primary flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden fade-in">
+              <div class="bg-primary p-8 text-center">
+                <div class="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                  </svg>
+                </div>
+                <h1 class="text-2xl font-display font-bold text-white mb-2" id="login-institution">${Utils.sanitizeHTML(AppState.config.institution_name)}</h1>
+                <p class="text-white/80" id="login-portal-title">${Utils.sanitizeHTML(AppState.config.portal_title)}</p>
+              </div>
+              
+              <div class="p-8">
+                <div id="login-form-container">
+                  <h2 class="text-xl font-semibold text-text mb-6">Sign In</h2>
+                  <form id="login-form" class="space-y-4">
+                    <div>
+                      <label class="block text-sm font-medium text-gray-600 mb-1">Email Address</label>
+                      <input type="email" id="login-email" required
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent transition"
+                        placeholder="your@email.com">
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-gray-600 mb-1">Password</label>
+                      <input type="password" id="login-password" required
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent transition"
+                        placeholder="••••••••">
+                    </div>
+                    <button type="submit" id="login-submit"
+                      class="w-full py-3 bg-accent text-white rounded-lg font-semibold hover:bg-accent/90 transition flex items-center justify-center gap-2">
+                      <span>Sign In</span>
+                    </button>
+                  </form>
+                  <p class="mt-4 text-center text-gray-600">
+                    Don't have an account? 
+                    <button onclick="RegisterView.show()" class="text-accent hover:underline font-medium">Register</button>
+                  </p>
+                </div>
+                
+                <div id="demo-accounts" class="mt-6 pt-6 border-t border-gray-200">
+                  <p class="text-sm text-gray-500 mb-3">Demo Accounts (click to auto-fill):</p>
+                  <div class="grid grid-cols-2 gap-2 text-xs">
+                    <button onclick="LoginView.demoLogin('admin')" class="p-2 bg-primary/10 rounded text-primary hover:bg-primary/20">
+                      Admin
+                    </button>
+                    <button onclick="LoginView.demoLogin('staff')" class="p-2 bg-secondary/10 rounded text-secondary hover:bg-secondary/20">
+                      Staff
+                    </button>
+                    <button onclick="LoginView.demoLogin('student')" class="p-2 bg-success/10 rounded text-success hover:bg-success/20">
+                      Student
+                    </button>
+                    <button onclick="LoginView.demoLogin('auditor')" class="p-2 bg-warning/10 rounded text-warning hover:bg-warning/20">
+                      Auditor
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+
+        document.getElementById('login-form').addEventListener('submit', LoginView.handleLogin);
+      },
+
+      demoLogin: async (role) => {
+        const demos = {
+          admin: { email: 'admin@school.edu', password: 'admin123', name: 'Dr. Sarah Johnson', role: 'admin' },
+          staff: { email: 'staff@school.edu', password: 'staff123', name: 'Mr. Robert Smith', role: 'staff' },
+          student: { email: 'student@school.edu', password: 'student123', name: 'Emily Davis', role: 'student' },
+          auditor: { email: 'auditor@school.edu', password: 'auditor123', name: 'James Wilson', role: 'auditor' }
+        };
+
+        const demo = demos[role];
+        if (!demo) return;
+
+        // Create demo user if not exists
+        let user = AppState.users.find(u => u.email === demo.email);
+        if (!user) {
+          user = {
+            id: Utils.generateId(),
+            email: demo.email,
+            name: demo.name,
+            role: demo.role,
+            passwordHash: await Utils.hashPassword(demo.password),
+            createdAt: new Date().toISOString(),
+            active: true
+          };
+          await DataOps.saveUser(user);
+        }
+
+        AppState.currentUser = user;
+        localStorage.setItem('edu-grc-token', JWT.sign({ userId: user.id, email: user.email, role: user.role }));
+        
+        await AuditLogger.log('LOGIN', 'user', user.id, { method: 'demo' });
+        Toast.show(`Welcome, ${user.name}!`, 'success');
+        DashboardView.render();
+      },
+
+      handleLogin: async (e) => {
+        e.preventDefault();
+        const email = Utils.escapeSQL(document.getElementById('login-email').value.trim());
+        const password = document.getElementById('login-password').value;
+        const submitBtn = document.getElementById('login-submit');
+
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="animate-pulse">Signing in...</span>';
+
+        const passwordHash = await Utils.hashPassword(password);
+        const user = AppState.users.find(u => u.email === email && u.passwordHash === passwordHash);
+
+        if (user) {
+          AppState.currentUser = user;
+          localStorage.setItem('edu-grc-token', JWT.sign({ userId: user.id, email: user.email, role: user.role }));
+          
+          await AuditLogger.log('LOGIN', 'user', user.id, { method: 'credentials' });
+          Toast.show(`Welcome back, ${user.name}!`, 'success');
+          DashboardView.render();
+        } else {
+          await AuditLogger.log('LOGIN_FAILED', 'user', null, { email, reason: 'invalid_credentials' });
+          Toast.show('Invalid email or password', 'error');
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<span>Sign In</span>';
+        }
+      }
+    };
+
+    // Register View
+    const RegisterView = {
+      show: () => {
+        const container = document.getElementById('login-form-container');
+        container.innerHTML = `
+          <h2 class="text-xl font-semibold text-text mb-6">Create Account</h2>
+          <form id="register-form" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-600 mb-1">Full Name</label>
+              <input type="text" id="register-name" required
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent transition"
+                placeholder="John Doe">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-600 mb-1">Email Address</label>
+              <input type="email" id="register-email" required
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent transition"
+                placeholder="your@email.com">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-600 mb-1">Password</label>
+              <input type="password" id="register-password" required minlength="6"
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent transition"
+                placeholder="Min 6 characters">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-600 mb-1">Role</label>
+              <select id="register-role" required
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent transition">
+                <option value="staff">Staff</option>
+                <option value="student">Student</option>
+              </select>
+            </div>
+            <button type="submit" id="register-submit"
+              class="w-full py-3 bg-accent text-white rounded-lg font-semibold hover:bg-accent/90 transition">
+              Create Account
+            </button>
+          </form>
+          <p class="mt-4 text-center text-gray-600">
+            Already have an account? 
+            <button onclick="LoginView.render()" class="text-accent hover:underline font-medium">Sign In</button>
+          </p>
+        `;
+
+        document.getElementById('register-form').addEventListener('submit', RegisterView.handleRegister);
+      },
+
+      handleRegister: async (e) => {
+        e.preventDefault();
+        const name = Utils.escapeSQL(document.getElementById('register-name').value.trim());
+        const email = Utils.escapeSQL(document.getElementById('register-email').value.trim());
+        const password = document.getElementById('register-password').value;
+        const role = document.getElementById('register-role').value;
+        const submitBtn = document.getElementById('register-submit');
+
+        if (AppState.users.find(u => u.email === email)) {
+          Toast.show('Email already registered', 'error');
+          return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Creating account...';
+
+        const user = {
+          id: Utils.generateId(),
+          email,
+          name,
+          role,
+          passwordHash: await Utils.hashPassword(password),
+          createdAt: new Date().toISOString(),
+          active: true
+        };
+
+        await DataOps.saveUser(user);
+        await AuditLogger.log('USER_REGISTERED', 'user', user.id, { email, role });
+        
+        Toast.show('Account created successfully! Please sign in.', 'success');
+        LoginView.render();
+      }
+    };
+
+    // Main Layout Component
+    const MainLayout = {
+      render: (content, activeNav = 'dashboard') => {
+        const app = document.getElementById('app');
+        const user = AppState.currentUser;
+        const roleLabel = AppState.roles.find(r => r.id === user.role)?.name || 'User';
+
+        const navItems = [
+          { id: 'dashboard', label: 'Dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', show: true },
+          { id: 'policies', label: 'Policies', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z', show: RBAC.canViewPolicies() },
+          { id: 'pending', label: 'Pending Signatures', icon: 'M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z', show: RBAC.canSignPolicies() },
+          { id: 'users', label: 'User Management', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z', show: RBAC.canManageUsers() },
+          { id: 'audit', label: 'Audit Logs', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01', show: RBAC.canViewAudit() }
+        ];
+
+        app.innerHTML = `
+          <div class="flex h-full">
+            <!-- Sidebar -->
+            <aside class="w-64 bg-primary flex flex-col flex-shrink-0">
+              <div class="p-6 border-b border-white/10">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <h1 class="text-white font-semibold text-sm" id="sidebar-institution">${Utils.sanitizeHTML(AppState.config.institution_name)}</h1>
+                    <p class="text-white/60 text-xs">Edu-GRC</p>
+                  </div>
+                </div>
+              </div>
+              
+              <nav class="flex-1 p-4 space-y-1">
+                ${navItems.filter(n => n.show).map(nav => `
+                  <button onclick="Navigate.to('${nav.id}')" 
+                    class="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition ${activeNav === nav.id ? 'bg-white/20 text-white' : 'text-white/70 hover:bg-white/10 hover:text-white'}">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${nav.icon}"/>
+                    </svg>
+                    <span class="text-sm font-medium">${nav.label}</span>
+                  </button>
+                `).join('')}
+              </nav>
+              
+              <div class="p-4 border-t border-white/10">
+                <div class="flex items-center gap-3 mb-4">
+                  <div class="w-10 h-10 bg-accent rounded-full flex items-center justify-center text-white font-semibold">
+                    ${user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <p class="text-white text-sm font-medium truncate">${Utils.sanitizeHTML(user.name)}</p>
+                    <p class="text-white/60 text-xs">${roleLabel}</p>
+                  </div>
+                </div>
+                <button onclick="MainLayout.logout()" 
+                  class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition text-sm">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                  </svg>
+                  Sign Out
+                </button>
+              </div>
+            </aside>
+            
+            <!-- Main Content -->
+            <main class="flex-1 overflow-auto bg-surface">
+              <div id="main-content" class="p-8">
+                ${content}
+              </div>
+            </main>
+          </div>
+        `;
+      },
+
+      logout: async () => {
+        await AuditLogger.log('LOGOUT', 'user', AppState.currentUser.id);
+        localStorage.removeItem('edu-grc-token');
+        AppState.currentUser = null;
+        Toast.show('Signed out successfully', 'info');
+        LoginView.render();
+      }
+    };
+
+    // Navigation Handler
+    const Navigate = {
+      to: (view) => {
+        AppState.currentView = view;
+        switch(view) {
+          case 'dashboard': DashboardView.render(); break;
+          case 'policies': PoliciesView.render(); break;
+          case 'pending': PendingView.render(); break;
+          case 'users': UsersView.render(); break;
+          case 'audit': AuditView.render(); break;
+          default: DashboardView.render();
+        }
+      }
+    };
+
+    // Dashboard View
+    const DashboardView = {
+      render: () => {
+        const user = AppState.currentUser;
+        const publishedPolicies = AppState.policies.filter(p => p.status === 'published');
+        const userAcks = AppState.acknowledgements.filter(a => a.userId === user.id);
+        const pendingCount = publishedPolicies.filter(p => 
+          !userAcks.some(a => a.policyId === p.id)
+        ).length;
+
+        const isAdmin = user.role === 'admin';
+        const isAuditor = user.role === 'auditor';
+
+        let statsContent = '';
+
+        if (isAdmin) {
+          const totalUsers = AppState.users.length;
+          const totalPolicies = AppState.policies.length;
+          const totalAcks = AppState.acknowledgements.length;
+          const complianceRate = publishedPolicies.length > 0 
+            ? Math.round((totalAcks / (publishedPolicies.length * Math.max(1, AppState.users.filter(u => u.role !== 'admin' && u.role !== 'auditor').length))) * 100)
+            : 100;
+
+          statsContent = `
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                <div class="flex items-center justify-between mb-4">
+                  <div class="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
+                    <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                  </div>
+                  <span class="text-xs font-medium text-success bg-success/10 px-2 py-1 rounded-full">Active</span>
+                </div>
+                <p class="text-3xl font-bold text-text">${totalPolicies}</p>
+                <p class="text-gray-500 text-sm mt-1">Total Policies</p>
+              </div>
+              
+              <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                <div class="flex items-center justify-between mb-4">
+                  <div class="w-12 h-12 bg-accent/10 rounded-xl flex items-center justify-center">
+                    <svg class="w-6 h-6 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+                    </svg>
+                  </div>
+                </div>
+                <p class="text-3xl font-bold text-text">${totalUsers}</p>
+                <p class="text-gray-500 text-sm mt-1">Registered Users</p>
+              </div>
+              
+              <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                <div class="flex items-center justify-between mb-4">
+                  <div class="w-12 h-12 bg-success/10 rounded-xl flex items-center justify-center">
+                    <svg class="w-6 h-6 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                  </div>
+                </div>
+                <p class="text-3xl font-bold text-text">${totalAcks}</p>
+                <p class="text-gray-500 text-sm mt-1">Acknowledgements</p>
+              </div>
+              
+              <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                <div class="flex items-center justify-between mb-4">
+                  <div class="w-12 h-12 bg-warning/10 rounded-xl flex items-center justify-center">
+                    <svg class="w-6 h-6 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                    </svg>
+                  </div>
+                </div>
+                <p class="text-3xl font-bold text-text">${complianceRate}%</p>
+                <p class="text-gray-500 text-sm mt-1">Compliance Rate</p>
+              </div>
+            </div>
+          `;
+        } else if (isAuditor) {
+          const totalLogs = AppState.auditLogs.length;
+          const todayLogs = AppState.auditLogs.filter(l => 
+            new Date(l.timestamp).toDateString() === new Date().toDateString()
+          ).length;
+
+          statsContent = `
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                <div class="flex items-center gap-4">
+                  <div class="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
+                    <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <p class="text-3xl font-bold text-text">${totalLogs}</p>
+                    <p class="text-gray-500 text-sm">Total Audit Logs</p>
+                  </div>
+                </div>
+              </div>
+              <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                <div class="flex items-center gap-4">
+                  <div class="w-12 h-12 bg-accent/10 rounded-xl flex items-center justify-center">
+                    <svg class="w-6 h-6 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <p class="text-3xl font-bold text-text">${todayLogs}</p>
+                    <p class="text-gray-500 text-sm">Today's Activity</p>
+                  </div>
+                </div>
+              </div>
+              <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                <div class="flex items-center gap-4">
+                  <div class="w-12 h-12 bg-success/10 rounded-xl flex items-center justify-center">
+                    <svg class="w-6 h-6 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <p class="text-3xl font-bold text-text">${publishedPolicies.length}</p>
+                    <p class="text-gray-500 text-sm">Published Policies</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        } else {
+          statsContent = `
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                <div class="flex items-center gap-4">
+                  <div class="w-12 h-12 ${pendingCount > 0 ? 'bg-warning/10' : 'bg-success/10'} rounded-xl flex items-center justify-center">
+                    <svg class="w-6 h-6 ${pendingCount > 0 ? 'text-warning' : 'text-success'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <p class="text-3xl font-bold text-text">${pendingCount}</p>
+                    <p class="text-gray-500 text-sm">Pending Signatures</p>
+                  </div>
+                </div>
+              </div>
+              <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                <div class="flex items-center gap-4">
+                  <div class="w-12 h-12 bg-success/10 rounded-xl flex items-center justify-center">
+                    <svg class="w-6 h-6 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <p class="text-3xl font-bold text-text">${userAcks.length}</p>
+                    <p class="text-gray-500 text-sm">Signed Policies</p>
+                  </div>
+                </div>
+              </div>
+              <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                <div class="flex items-center gap-4">
+                  <div class="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
+                    <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <p class="text-3xl font-bold text-text">${publishedPolicies.length}</p>
+                    <p class="text-gray-500 text-sm">Total Policies</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+
+        // Recent activity section
+        const recentLogs = AppState.auditLogs.slice(-5).reverse();
+        
+        const content = `
+          <div class="fade-in">
+            <div class="mb-8">
+              <h1 class="text-2xl font-display font-bold text-primary">Welcome back, ${Utils.sanitizeHTML(user.name.split(' ')[0])}</h1>
+              <p class="text-gray-500 mt-1">Here's what's happening with your compliance portal today.</p>
+            </div>
+            
+            ${statsContent}
+            
+            ${pendingCount > 0 && !isAdmin && !isAuditor ? `
+              <div class="bg-warning/10 border border-warning/20 rounded-xl p-4 mb-8 flex items-center gap-4">
+                <div class="w-10 h-10 bg-warning rounded-full flex items-center justify-center flex-shrink-0">
+                  <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                  </svg>
+                </div>
+                <div class="flex-1">
+                  <p class="font-semibold text-warning">Action Required</p>
+                  <p class="text-sm text-gray-600">You have ${pendingCount} policy(ies) awaiting your acknowledgement.</p>
+                </div>
+                <button onclick="Navigate.to('pending')" class="px-4 py-2 bg-warning text-white rounded-lg font-medium hover:bg-warning/90 transition">
+                  Review Now
+                </button>
+              </div>
+            ` : ''}
+            
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <!-- Recent Policies -->
+              <div class="bg-white rounded-xl shadow-sm border border-gray-100">
+                <div class="p-6 border-b border-gray-100 flex items-center justify-between">
+                  <h2 class="font-semibold text-text">Recent Policies</h2>
+                  <button onclick="Navigate.to('policies')" class="text-sm text-accent hover:underline">View All</button>
+                </div>
+                <div class="divide-y divide-gray-100">
+                  ${publishedPolicies.length === 0 ? `
+                    <div class="p-6 text-center text-gray-500">
+                      <p>No policies published yet.</p>
+                    </div>
+                  ` : publishedPolicies.slice(-3).reverse().map(policy => {
+                    const isSigned = userAcks.some(a => a.policyId === policy.id);
+                    return `
+                      <div class="p-4 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer" onclick="PolicyView.show('${policy.id}')">
+                        <div class="flex items-center gap-3">
+                          <div class="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                            <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                          </div>
+                          <div>
+                            <p class="font-medium text-text">${Utils.sanitizeHTML(policy.title)}</p>
+                            <p class="text-xs text-gray-500">v${policy.version} • ${Utils.formatDateShort(policy.updatedAt)}</p>
+                          </div>
+                        </div>
+                        ${isSigned ? `
+                          <span class="text-xs font-medium text-success bg-success/10 px-2 py-1 rounded-full">Signed</span>
+                        ` : `
+                          <span class="text-xs font-medium text-warning bg-warning/10 px-2 py-1 rounded-full">Pending</span>
+                        `}
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+              </div>
+              
+              <!-- Recent Activity -->
+              <div class="bg-white rounded-xl shadow-sm border border-gray-100">
+                <div class="p-6 border-b border-gray-100 flex items-center justify-between">
+                  <h2 class="font-semibold text-text">Recent Activity</h2>
+                  ${RBAC.canViewAudit() ? `
+                    <button onclick="Navigate.to('audit')" class="text-sm text-accent hover:underline">View All</button>
+                  ` : ''}
+                </div>
+                <div class="divide-y divide-gray-100">
+                  ${recentLogs.length === 0 ? `
+                    <div class="p-6 text-center text-gray-500">
+                      <p>No recent activity.</p>
+                    </div>
+                  ` : recentLogs.map(log => `
+                    <div class="p-4 flex items-center gap-3">
+                      <div class="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
+                        <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <p class="text-sm text-text truncate">
+                          <span class="font-medium">${Utils.sanitizeHTML(log.userName)}</span> 
+                          <span class="text-gray-500">${log.action.replace(/_/g, ' ').toLowerCase()}</span>
+                        </p>
+                        <p class="text-xs text-gray-400">${Utils.formatDate(log.timestamp)}</p>
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+
+        MainLayout.render(content, 'dashboard');
+      }
+    };
+
+    // Policies View
+    const PoliciesView = {
+      render: () => {
+        const isAdmin = RBAC.canManagePolicies();
+        const policies = AppState.policies;
+
+        const getStatusBadge = (status) => {
+          const badges = {
+            draft: 'bg-gray-100 text-gray-700',
+            review: 'bg-yellow-100 text-yellow-700',
+            published: 'bg-green-100 text-green-700'
+          };
+          return badges[status] || badges.draft;
+        };
+
+        const content = `
+          <div class="fade-in">
+            <div class="flex items-center justify-between mb-8">
+              <div>
+                <h1 class="text-2xl font-display font-bold text-primary">Policies</h1>
+                <p class="text-gray-500 mt-1">Manage institutional policies and compliance documents.</p>
+              </div>
+              ${isAdmin ? `
+                <button onclick="PolicyEditor.create()" 
+                  class="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg font-medium hover:bg-accent/90 transition">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                  </svg>
+                  Create Policy
+                </button>
+              ` : ''}
+            </div>
+            
+            <!-- Filter Tabs -->
+            <div class="flex gap-2 mb-6">
+              <button onclick="PoliciesView.filter('all')" id="filter-all" class="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium">All</button>
+              ${isAdmin ? `
+                <button onclick="PoliciesView.filter('draft')" id="filter-draft" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200">Draft</button>
+                <button onclick="PoliciesView.filter('review')" id="filter-review" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200">Review</button>
+              ` : ''}
+              <button onclick="PoliciesView.filter('published')" id="filter-published" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200">Published</button>
+            </div>
+            
+            <!-- Policies Grid -->
+            <div id="policies-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              ${policies.length === 0 ? `
+                <div class="col-span-full bg-white rounded-xl p-12 text-center">
+                  <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                  </div>
+                  <h3 class="text-lg font-semibold text-gray-700 mb-2">No Policies Yet</h3>
+                  <p class="text-gray-500 mb-4">Get started by creating your first policy document.</p>
+                  ${isAdmin ? `
+                    <button onclick="PolicyEditor.create()" class="px-4 py-2 bg-accent text-white rounded-lg font-medium hover:bg-accent/90">
+                      Create First Policy
+                    </button>
+                  ` : ''}
+                </div>
+              ` : policies.map(policy => `
+                <div class="policy-card bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition cursor-pointer" 
+                  data-status="${policy.status}" onclick="PolicyView.show('${policy.id}')">
+                  <div class="p-6">
+                    <div class="flex items-start justify-between mb-4">
+                      <span class="px-2 py-1 text-xs font-medium rounded-full ${getStatusBadge(policy.status)}">${policy.status}</span>
+                      <span class="text-xs text-gray-500">v${policy.version}</span>
+                    </div>
+                    <h3 class="font-semibold text-text mb-2 line-clamp-2">${Utils.sanitizeHTML(policy.title)}</h3>
+                    <p class="text-sm text-gray-500 line-clamp-2 mb-4">${Utils.sanitizeHTML(policy.description || 'No description')}</p>
+                    <div class="flex items-center justify-between text-xs text-gray-400">
+                      <span>Updated ${Utils.formatDateShort(policy.updatedAt)}</span>
+                      ${isAdmin && policy.status !== 'published' ? `
+                        <button onclick="event.stopPropagation(); PolicyEditor.edit('${policy.id}')" 
+                          class="text-accent hover:underline">Edit</button>
+                      ` : ''}
+                    </div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+
+        MainLayout.render(content, 'policies');
+      },
+
+      filter: (status) => {
+        const cards = document.querySelectorAll('.policy-card');
+        const buttons = document.querySelectorAll('[id^="filter-"]');
+        
+        buttons.forEach(btn => {
+          btn.className = 'px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200';
+        });
+        document.getElementById(`filter-${status}`).className = 'px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium';
+
+        cards.forEach(card => {
+          if (status === 'all' || card.dataset.status === status) {
+            card.style.display = 'block';
+          } else {
+            card.style.display = 'none';
+          }
+        });
+      }
+    };
+
+    // Policy Editor
+    const PolicyEditor = {
+      currentPolicy: null,
+
+      create: () => {
+        PolicyEditor.currentPolicy = null;
+        PolicyEditor.showEditor();
+      },
+
+      edit: (policyId) => {
+        PolicyEditor.currentPolicy = AppState.policies.find(p => p.id === policyId);
+        PolicyEditor.showEditor();
+      },
+
+      showEditor: () => {
+        const policy = PolicyEditor.currentPolicy;
+        const isNew = !policy;
+
+        const content = `
+          <div class="fade-in">
+            <div class="flex items-center gap-4 mb-8">
+              <button onclick="Navigate.to('policies')" class="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center hover:bg-gray-200 transition">
+                <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                </svg>
+              </button>
+              <div>
+                <h1 class="text-2xl font-display font-bold text-primary">${isNew ? 'Create New Policy' : 'Edit Policy'}</h1>
+                <p class="text-gray-500 mt-1">${isNew ? 'Draft a new policy document.' : `Editing: ${Utils.sanitizeHTML(policy.title)}`}</p>
+              </div>
+            </div>
+            
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100">
+              <form id="policy-form" class="p-6 space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Policy Title *</label>
+                    <input type="text" id="policy-title" required
+                      value="${policy ? Utils.sanitizeHTML(policy.title) : ''}"
+                      class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent"
+                      placeholder="e.g., Student Code of Conduct">
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                    <select id="policy-status" 
+                      class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent">
+                      <option value="draft" ${policy?.status === 'draft' ? 'selected' : ''}>Draft</option>
+                      <option value="review" ${policy?.status === 'review' ? 'selected' : ''}>Under Review</option>
+                      <option value="published" ${policy?.status === 'published' ? 'selected' : ''}>Published</option>
+                    </select>
+                  </div>
+                </div>
+                
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                  <textarea id="policy-description" rows="2"
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent"
+                    placeholder="Brief description of the policy...">${policy ? Utils.sanitizeHTML(policy.description || '') : ''}</textarea>
+                </div>
+                
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">Policy Content *</label>
+                  <div class="border border-gray-300 rounded-lg overflow-hidden">
+                    <!-- Simple Toolbar -->
+                    <div class="bg-gray-50 border-b border-gray-300 p-2 flex flex-wrap gap-2">
+                      <button type="button" onclick="PolicyEditor.formatText('bold')" class="p-2 hover:bg-gray-200 rounded" title="Bold">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 4h8a4 4 0 014 4 4 4 0 01-4 4H6z M6 12h9a4 4 0 014 4 4 4 0 01-4 4H6z"/></svg>
+                      </button>
+                      <button type="button" onclick="PolicyEditor.formatText('italic')" class="p-2 hover:bg-gray-200 rounded" title="Italic">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 4h4m-2 16h-4m6-16l-4 16"/></svg>
+                      </button>
+                      <button type="button" onclick="PolicyEditor.formatText('underline')" class="p-2 hover:bg-gray-200 rounded" title="Underline">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8v4a5 5 0 0010 0V8 M5 20h14"/></svg>
+                      </button>
+                      <div class="w-px bg-gray-300 mx-1"></div>
+                      <button type="button" onclick="PolicyEditor.formatText('insertUnorderedList')" class="p-2 hover:bg-gray-200 rounded" title="Bullet List">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                      </button>
+                      <button type="button" onclick="PolicyEditor.formatText('insertOrderedList')" class="p-2 hover:bg-gray-200 rounded" title="Numbered List">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h10M7 16h10M4 6h.01M4 10h.01M4 14h.01M4 18h.01"/></svg>
+                      </button>
+                    </div>
+                    <!-- Content Editable Area -->
+                    <div id="policy-content" contenteditable="true" 
+                      class="rich-editor p-4 min-h-[300px] focus:outline-none policy-content"
+                      placeholder="Enter the full policy text here...">${policy ? policy.content : '<p>Enter policy content here...</p>'}</div>
+                  </div>
+                </div>
+                
+                <div class="flex items-center justify-between pt-4 border-t border-gray-200">
+                  <button type="button" onclick="Navigate.to('policies')" 
+                    class="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">
+                    Cancel
+                  </button>
+                  <div class="flex gap-3">
+                    ${!isNew && policy?.status !== 'published' ? `
+                      <button type="button" onclick="PolicyEditor.publish()" 
+                        class="px-4 py-2 bg-success text-white rounded-lg font-medium hover:bg-success/90 transition">
+                        Publish Policy
+                      </button>
+                    ` : ''}
+                    <button type="submit" id="save-policy-btn"
+                      class="px-6 py-2 bg-accent text-white rounded-lg font-medium hover:bg-accent/90 transition flex items-center gap-2">
+                      <span>Save ${isNew ? 'Draft' : 'Changes'}</span>
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        `;
+
+        MainLayout.render(content, 'policies');
+        document.getElementById('policy-form').addEventListener('submit', PolicyEditor.save);
+      },
+
+      formatText: (command) => {
+        document.execCommand(command, false, null);
+        document.getElementById('policy-content').focus();
+      },
+
+      save: async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('save-policy-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="animate-pulse">Saving...</span>';
+
+        const title = Utils.escapeSQL(document.getElementById('policy-title').value.trim());
+        const description = Utils.escapeSQL(document.getElementById('policy-description').value.trim());
+        const status = document.getElementById('policy-status').value;
+        const content = document.getElementById('policy-content').innerHTML;
+
+        const isNew = !PolicyEditor.currentPolicy;
+        const now = new Date().toISOString();
+
+        let policy;
+        if (isNew) {
+          policy = {
+            id: Utils.generateId(),
+            title,
+            description,
+            content,
+            status,
+            version: '1.0',
+            createdAt: now,
+            updatedAt: now,
+            createdBy: AppState.currentUser.id
+          };
+        } else {
+          const oldPolicy = PolicyEditor.currentPolicy;
+          const newVersion = oldPolicy.status === 'published' 
+            ? (parseFloat(oldPolicy.version) + 0.1).toFixed(1)
+            : oldPolicy.version;
+
+          policy = {
+            ...oldPolicy,
+            title,
+            description,
+            content,
+            status,
+            version: newVersion,
+            updatedAt: now
+          };
+
+          // Save old version to history if status was published
+          if (oldPolicy.status === 'published' && status !== 'published') {
+            const versionRecord = {
+              id: Utils.generateId(),
+              policyId: oldPolicy.id,
+              version: oldPolicy.version,
+              content: oldPolicy.content,
+              createdAt: now,
+              createdBy: AppState.currentUser.id
+            };
+            await DataOps.savePolicyVersion(versionRecord);
+          }
+        }
+
+        await DataOps.savePolicy(policy);
+        await AuditLogger.log(isNew ? 'POLICY_CREATED' : 'POLICY_UPDATED', 'policy', policy.id, {
+          title: policy.title,
+          status: policy.status,
+          version: policy.version
+        });
+
+        Toast.show(`Policy ${isNew ? 'created' : 'updated'} successfully!`, 'success');
+        Navigate.to('policies');
+      },
+
+      publish: async () => {
+        if (!PolicyEditor.currentPolicy) return;
+
+        Modal.show(
+          'Publish Policy',
+          `
+            <p class="text-gray-600 mb-4">Are you sure you want to publish this policy?</p>
+            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <p class="text-sm text-yellow-800">
+                <strong>Note:</strong> Publishing will make this policy available to all users for acknowledgement. 
+                Any future edits will create a new version.
+              </p>
+            </div>
+          `,
+          [
+            { label: 'Cancel', primary: false },
+            { 
+              label: 'Publish Now', 
+              primary: true, 
+              onClick: async () => {
+                const policy = PolicyEditor.currentPolicy;
+                policy.status = 'published';
+                policy.publishedAt = new Date().toISOString();
+                policy.updatedAt = new Date().toISOString();
+
+                await DataOps.savePolicy(policy);
+                await AuditLogger.log('POLICY_PUBLISHED', 'policy', policy.id, {
+                  title: policy.title,
+                  version: policy.version
+                });
+
+                // Simulate email notification
+                Toast.show('Policy published! Email notifications sent.', 'success');
+                Navigate.to('policies');
+              }
+            }
+          ]
+        );
+      }
+    };
+
+    // Policy View (Read-only)
+    const PolicyView = {
+      show: (policyId) => {
+        const policy = AppState.policies.find(p => p.id === policyId);
+        if (!policy) {
+          Toast.show('Policy not found', 'error');
+          return;
+        }
+
+        const userAck = AppState.acknowledgements.find(
+          a => a.policyId === policyId && a.userId === AppState.currentUser.id
+        );
+
+        const isAdmin = RBAC.canManagePolicies();
+        const canSign = RBAC.canSignPolicies() && policy.status === 'published' && !userAck;
+
+        // Get compliance stats for admin
+        let complianceStats = null;
+        if (isAdmin && policy.status === 'published') {
+          const totalUsers = AppState.users.filter(u => u.role !== 'admin' && u.role !== 'auditor').length;
+          const signedUsers = AppState.acknowledgements.filter(a => a.policyId === policyId).length;
+          complianceStats = { total: totalUsers, signed: signedUsers };
+        }
+
+        const content = `
+          <div class="fade-in">
+            <div class="flex items-center gap-4 mb-8">
+              <button onclick="Navigate.to('policies')" class="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center hover:bg-gray-200 transition">
+                <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                </svg>
+              </button>
+              <div class="flex-1">
+                <div class="flex items-center gap-3">
+                  <h1 class="text-2xl font-display font-bold text-primary">${Utils.sanitizeHTML(policy.title)}</h1>
+                  <span class="px-2 py-1 text-xs font-medium rounded-full ${
+                    policy.status === 'published' ? 'bg-green-100 text-green-700' : 
+                    policy.status === 'review' ? 'bg-yellow-100 text-yellow-700' : 
+                    'bg-gray-100 text-gray-700'
+                  }">${policy.status}</span>
+                </div>
+                <p class="text-gray-500 mt-1">Version ${policy.version} • Last updated ${Utils.formatDate(policy.updatedAt)}</p>
+              </div>
+              ${isAdmin && policy.status !== 'published' ? `
+                <button onclick="PolicyEditor.edit('${policy.id}')" 
+                  class="px-4 py-2 bg-accent text-white rounded-lg font-medium hover:bg-accent/90 transition">
+                  Edit Policy
+                </button>
+              ` : ''}
+            </div>
+            
+            ${complianceStats ? `
+              <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100 mb-6">
+                <h3 class="font-semibold text-text mb-4">Compliance Overview</h3>
+                <div class="flex items-center gap-6">
+                  <div class="flex-1">
+                    <div class="flex justify-between text-sm mb-2">
+                      <span class="text-gray-600">Acknowledgements</span>
+                      <span class="font-medium">${complianceStats.signed} / ${complianceStats.total}</span>
+                    </div>
+                    <div class="h-3 bg-gray-200 rounded-full overflow-hidden">
+                      <div class="h-full bg-success rounded-full transition-all" 
+                        style="width: ${complianceStats.total > 0 ? (complianceStats.signed / complianceStats.total) * 100 : 100}%"></div>
+                    </div>
+                  </div>
+                  <button onclick="PolicyView.showCompliance('${policy.id}')" 
+                    class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition">
+                    View Details
+                  </button>
+                </div>
+              </div>
+            ` : ''}
+            
+            ${userAck ? `
+              <div class="bg-success/10 border border-success/20 rounded-xl p-4 mb-6 flex items-center gap-4">
+                <div class="w-10 h-10 bg-success rounded-full flex items-center justify-center flex-shrink-0">
+                  <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                  </svg>
+                </div>
+                <div>
+                  <p class="font-semibold text-success">You have acknowledged this policy</p>
+                  <p class="text-sm text-gray-600">Signed on ${Utils.formatDate(userAck.signedAt)} from IP ${userAck.ipAddress}</p>
+                </div>
+              </div>
+            ` : ''}
+            
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              <div class="p-8 policy-content">
+                ${policy.content}
+              </div>
+              
+              ${canSign ? `
+                <div class="p-6 bg-gray-50 border-t border-gray-200">
+                  <div class="flex items-start gap-4">
+                    <input type="checkbox" id="agree-checkbox" class="mt-1 w-5 h-5 text-accent rounded border-gray-300 focus:ring-accent">
+                    <label for="agree-checkbox" class="text-sm text-gray-600">
+                      I have read, understood, and agree to comply with this policy. I understand that my acknowledgement 
+                      will be recorded with my name, timestamp, and IP address for audit purposes.
+                    </label>
+                  </div>
+                  <button onclick="PolicyView.acknowledge('${policy.id}')" id="agree-btn" disabled
+                    class="mt-4 w-full py-3 bg-accent text-white rounded-lg font-semibold hover:bg-accent/90 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                    I Agree & Acknowledge
+                  </button>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        `;
+
+        MainLayout.render(content, 'policies');
+
+        // Setup checkbox listener
+        const checkbox = document.getElementById('agree-checkbox');
+        const btn = document.getElementById('agree-btn');
+        if (checkbox && btn) {
+          checkbox.addEventListener('change', () => {
+            btn.disabled = !checkbox.checked;
+          });
+        }
+      },
+
+      acknowledge: async (policyId) => {
+        const btn = document.getElementById('agree-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="animate-pulse">Processing...</span>';
+
+        const acknowledgement = {
+          id: Utils.generateId(),
+          policyId,
+          userId: AppState.currentUser.id,
+          userName: AppState.currentUser.name,
+          userEmail: AppState.currentUser.email,
+          ipAddress: Utils.getClientIP(),
+          userAgent: navigator.userAgent,
+          signedAt: new Date().toISOString()
+        };
+
+        await DataOps.saveAcknowledgement(acknowledgement);
+        await AuditLogger.log('POLICY_ACKNOWLEDGED', 'acknowledgement', acknowledgement.id, {
+          policyId,
+          userId: AppState.currentUser.id,
+          ipAddress: acknowledgement.ipAddress
+        });
+
+        Toast.show('Policy acknowledged successfully!', 'success');
+        PolicyView.show(policyId);
+      },
+
+      showCompliance: (policyId) => {
+        const policy = AppState.policies.find(p => p.id === policyId);
+        const policyAcks = AppState.acknowledgements.filter(a => a.policyId === policyId);
+        const signedUserIds = policyAcks.map(a => a.userId);
+        
+        const applicableUsers = AppState.users.filter(u => u.role !== 'admin' && u.role !== 'auditor');
+        const signedUsers = applicableUsers.filter(u => signedUserIds.includes(u.id));
+        const unsignedUsers = applicableUsers.filter(u => !signedUserIds.includes(u.id));
+
+        Modal.show(
+          'Compliance Details',
+          `
+            <div class="space-y-4 max-h-[60vh] overflow-auto">
+              <div class="bg-success/10 rounded-lg p-4">
+                <h4 class="font-semibold text-success mb-2">Signed (${signedUsers.length})</h4>
+                ${signedUsers.length === 0 ? '<p class="text-gray-500 text-sm">No signatures yet</p>' : `
+                  <ul class="space-y-2">
+                    ${signedUsers.map(u => {
+                      const ack = policyAcks.find(a => a.userId === u.id);
+                      return `
+                        <li class="flex items-center justify-between text-sm">
+                          <span>${Utils.sanitizeHTML(u.name)}</span>
+                          <span class="text-gray-500">${Utils.formatDateShort(ack.signedAt)}</span>
+                        </li>
+                      `;
+                    }).join('')}
+                  </ul>
+                `}
+              </div>
+              
+              <div class="bg-warning/10 rounded-lg p-4">
+                <h4 class="font-semibold text-warning mb-2">Pending (${unsignedUsers.length})</h4>
+                ${unsignedUsers.length === 0 ? '<p class="text-gray-500 text-sm">Everyone has signed!</p>' : `
+                  <ul class="space-y-2">
+                    ${unsignedUsers.map(u => `
+                      <li class="flex items-center justify-between text-sm">
+                        <span>${Utils.sanitizeHTML(u.name)}</span>
+                        <span class="text-xs text-gray-400">${u.role}</span>
+                      </li>
+                    `).join('')}
+                  </ul>
+                `}
+              </div>
+            </div>
+          `,
+          [{ label: 'Close', primary: true }]
+        );
+      }
+    };
+
+    // Pending Signatures View
+    const PendingView = {
+      render: () => {
+        const user = AppState.currentUser;
+        const publishedPolicies = AppState.policies.filter(p => p.status === 'published');
+        const userAcks = AppState.acknowledgements.filter(a => a.userId === user.id);
+        const pendingPolicies = publishedPolicies.filter(p => 
+          !userAcks.some(a => a.policyId === p.id)
+        );
+        const signedPolicies = publishedPolicies.filter(p => 
+          userAcks.some(a => a.policyId === p.id)
+        );
+
+        const content = `
+          <div class="fade-in">
+            <div class="mb-8">
+              <h1 class="text-2xl font-display font-bold text-primary">My Signatures</h1>
+              <p class="text-gray-500 mt-1">Review and acknowledge policies assigned to you.</p>
+            </div>
+            
+            <!-- Pending Section -->
+            <div class="mb-8">
+              <h2 class="text-lg font-semibold text-text mb-4 flex items-center gap-2">
+                <span class="w-6 h-6 bg-warning rounded-full flex items-center justify-center text-white text-xs">${pendingPolicies.length}</span>
+                Pending Acknowledgement
+              </h2>
+              
+              ${pendingPolicies.length === 0 ? `
+                <div class="bg-white rounded-xl p-8 text-center border border-gray-100">
+                  <div class="w-16 h-16 bg-success/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-8 h-8 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                  </div>
+                  <h3 class="text-lg font-semibold text-gray-700 mb-2">All Caught Up!</h3>
+                  <p class="text-gray-500">You have acknowledged all assigned policies.</p>
+                </div>
+              ` : `
+                <div class="space-y-4">
+                  ${pendingPolicies.map(policy => `
+                    <div class="bg-white rounded-xl p-6 shadow-sm border border-warning/30 hover:shadow-md transition">
+                      <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                          <h3 class="font-semibold text-text mb-2">${Utils.sanitizeHTML(policy.title)}</h3>
+                          <p class="text-sm text-gray-500 mb-3">${Utils.sanitizeHTML(policy.description || 'No description')}</p>
+                          <div class="flex items-center gap-4 text-xs text-gray-400">
+                            <span>Version ${policy.version}</span>
+                            <span>Published ${Utils.formatDateShort(policy.publishedAt || policy.updatedAt)}</span>
+                          </div>
+                        </div>
+                        <button onclick="PolicyView.show('${policy.id}')" 
+                          class="px-4 py-2 bg-warning text-white rounded-lg font-medium hover:bg-warning/90 transition flex items-center gap-2">
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                          </svg>
+                          Review & Sign
+                        </button>
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              `}
+            </div>
+            
+            <!-- Signed Section -->
+            <div>
+              <h2 class="text-lg font-semibold text-text mb-4 flex items-center gap-2">
+                <span class="w-6 h-6 bg-success rounded-full flex items-center justify-center text-white text-xs">${signedPolicies.length}</span>
+                Signed Policies
+              </h2>
+              
+              ${signedPolicies.length === 0 ? `
+                <div class="bg-white rounded-xl p-8 text-center border border-gray-100">
+                  <p class="text-gray-500">No policies signed yet.</p>
+                </div>
+              ` : `
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                  <table class="w-full">
+                    <thead class="bg-gray-50">
+                      <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Policy</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Version</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Signed Date</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">IP Address</th>
+                        <th class="px-6 py-3"></th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                      ${signedPolicies.map(policy => {
+                        const ack = userAcks.find(a => a.policyId === policy.id);
+                        return `
+                          <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4">
+                              <p class="font-medium text-text">${Utils.sanitizeHTML(policy.title)}</p>
+                            </td>
+                            <td class="px-6 py-4 text-sm text-gray-500">v${policy.version}</td>
+                            <td class="px-6 py-4 text-sm text-gray-500">${Utils.formatDate(ack.signedAt)}</td>
+                            <td class="px-6 py-4 text-sm text-gray-500 font-mono">${ack.ipAddress}</td>
+                            <td class="px-6 py-4">
+                              <button onclick="PolicyView.show('${policy.id}')" 
+                                class="text-accent hover:underline text-sm">View</button>
+                            </td>
+                          </tr>
+                        `;
+                      }).join('')}
+                    </tbody>
+                  </table>
+                </div>
+              `}
+            </div>
+          </div>
+        `;
+
+        MainLayout.render(content, 'pending');
+      }
+    };
+
+    // Users Management View
+    const UsersView = {
+      render: () => {
+        const users = AppState.users;
+        const currentUserId = AppState.currentUser.id;
+
+        const getRoleBadge = (role) => {
+          const badges = {
+            admin: 'bg-purple-100 text-purple-700',
+            staff: 'bg-blue-100 text-blue-700',
+            student: 'bg-green-100 text-green-700',
+            auditor: 'bg-orange-100 text-orange-700'
+          };
+          return badges[role] || 'bg-gray-100 text-gray-700';
+        };
+
+        const content = `
+          <div class="fade-in">
+            <div class="flex items-center justify-between mb-8">
+              <div>
+                <h1 class="text-2xl font-display font-bold text-primary">User Management</h1>
+                <p class="text-gray-500 mt-1">Manage user accounts and role assignments.</p>
+              </div>
+              <div class="text-sm text-gray-500">
+                Total Users: <span class="font-semibold">${users.length}</span>
+              </div>
+            </div>
+            
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              <table class="w-full">
+                <thead class="bg-gray-50">
+                  <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Joined</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                  ${users.map(user => `
+                    <tr class="hover:bg-gray-50">
+                      <td class="px-6 py-4">
+                        <div class="flex items-center gap-3">
+                          <div class="w-10 h-10 bg-accent rounded-full flex items-center justify-center text-white font-semibold">
+                            ${user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                          </div>
+                          <div>
+                            <p class="font-medium text-text">${Utils.sanitizeHTML(user.name)}</p>
+                            <p class="text-sm text-gray-500">${Utils.sanitizeHTML(user.email)}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td class="px-6 py-4">
+                        <span class="px-2 py-1 text-xs font-medium rounded-full ${getRoleBadge(user.role)}">${user.role}</span>
+                      </td>
+                      <td class="px-6 py-4">
+                        <span class="px-2 py-1 text-xs font-medium rounded-full ${user.active !== false ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+                          ${user.active !== false ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td class="px-6 py-4 text-sm text-gray-500">${Utils.formatDateShort(user.createdAt)}</td>
+                      <td class="px-6 py-4">
+                        ${user.id !== currentUserId ? `
+                          <button onclick="UsersView.editRole('${user.id}')" 
+                            class="text-accent hover:underline text-sm">Change Role</button>
+                        ` : `
+                          <span class="text-xs text-gray-400">(You)</span>
+                        `}
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+
+        MainLayout.render(content, 'users');
+      },
+
+      editRole: (userId) => {
+        const user = AppState.users.find(u => u.id === userId);
+        if (!user) return;
+
+        Modal.show(
+          'Change User Role',
+          `
+            <div class="space-y-4">
+              <div>
+                <p class="text-sm text-gray-600 mb-2">User</p>
+                <p class="font-medium">${Utils.sanitizeHTML(user.name)} (${Utils.sanitizeHTML(user.email)})</p>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">New Role</label>
+                <select id="new-role" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent">
+                  ${AppState.roles.map(role => `
+                    <option value="${role.id}" ${user.role === role.id ? 'selected' : ''}>${role.name}</option>
+                  `).join('')}
+                </select>
+              </div>
+            </div>
+          `,
+          [
+            { label: 'Cancel', primary: false },
+            {
+              label: 'Update Role',
+              primary: true,
+              onClick: async () => {
+                const newRole = document.getElementById('new-role').value;
+                const oldRole = user.role;
+                user.role = newRole;
+                user.updatedAt = new Date().toISOString();
+
+                await DataOps.saveUser(user);
+                await AuditLogger.log('USER_ROLE_CHANGED', 'user', user.id, {
+                  userName: user.name,
+                  oldRole,
+                  newRole
+                });
+
+                Toast.show('User role updated successfully!', 'success');
+                UsersView.render();
+              }
+            }
+          ]
+        );
+      }
+    };
+
+    // Audit Logs View
+    const AuditView = {
+      render: () => {
+        const logs = [...AppState.auditLogs].reverse();
+
+        const getActionColor = (action) => {
+          if (action.includes('LOGIN')) return 'text-blue-600 bg-blue-50';
+          if (action.includes('CREATED') || action.includes('REGISTERED')) return 'text-green-600 bg-green-50';
+          if (action.includes('UPDATED') || action.includes('CHANGED')) return 'text-yellow-600 bg-yellow-50';
+          if (action.includes('DELETED')) return 'text-red-600 bg-red-50';
+          if (action.includes('ACKNOWLEDGED')) return 'text-purple-600 bg-purple-50';
+          if (action.includes('PUBLISHED')) return 'text-indigo-600 bg-indigo-50';
+          return 'text-gray-600 bg-gray-50';
+        };
+
+        const content = `
+          <div class="fade-in">
+            <div class="flex items-center justify-between mb-8">
+              <div>
+                <h1 class="text-2xl font-display font-bold text-primary">Audit Logs</h1>
+                <p class="text-gray-500 mt-1">Immutable record of all system activities.</p>
+              </div>
+              <div class="flex gap-3">
+                <button onclick="AuditView.export()" 
+                  class="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                  </svg>
+                  Export CSV
+                </button>
+              </div>
+            </div>
+            
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              ${logs.length === 0 ? `
+                <div class="p-12 text-center">
+                  <p class="text-gray-500">No audit logs recorded yet.</p>
+                </div>
+              ` : `
+                <div class="overflow-x-auto">
+                  <table class="w-full">
+                    <thead class="bg-gray-50">
+                      <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Entity</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">IP Address</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Details</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                      ${logs.slice(0, 100).map(log => `
+                        <tr class="hover:bg-gray-50">
+                          <td class="px-6 py-4 text-sm text-gray-500 whitespace-nowrap">${Utils.formatDate(log.timestamp)}</td>
+                          <td class="px-6 py-4">
+                            <div>
+                              <p class="text-sm font-medium text-text">${Utils.sanitizeHTML(log.userName)}</p>
+                              <p class="text-xs text-gray-400">${log.userRole}</p>
+                            </div>
+                          </td>
+                          <td class="px-6 py-4">
+                            <span class="px-2 py-1 text-xs font-medium rounded ${getActionColor(log.action)}">
+                              ${log.action.replace(/_/g, ' ')}
+                            </span>
+                          </td>
+                          <td class="px-6 py-4 text-sm text-gray-500">${log.entity}</td>
+                          <td class="px-6 py-4 text-sm text-gray-500 font-mono">${log.ipAddress}</td>
+                          <td class="px-6 py-4">
+                            <button onclick="AuditView.showDetails('${logs.indexOf(log)}')" 
+                              class="text-accent hover:underline text-sm">View</button>
+                          </td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                </div>
+                ${logs.length > 100 ? `
+                  <div class="p-4 bg-gray-50 text-center text-sm text-gray-500">
+                    Showing 100 of ${logs.length} entries
+                  </div>
+                ` : ''}
+              `}
+            </div>
+          </div>
+        `;
+
+        MainLayout.render(content, 'audit');
+      },
+
+      showDetails: (index) => {
+        const log = [...AppState.auditLogs].reverse()[index];
+        if (!log) return;
+
+        Modal.show(
+          'Audit Log Details',
+          `
+            <div class="space-y-4 text-sm">
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <p class="text-gray-500">Timestamp</p>
+                  <p class="font-medium">${Utils.formatDate(log.timestamp)}</p>
+                </div>
+                <div>
+                  <p class="text-gray-500">Action</p>
+                  <p class="font-medium">${log.action}</p>
+                </div>
+                <div>
+                  <p class="text-gray-500">User</p>
+                  <p class="font-medium">${Utils.sanitizeHTML(log.userName)} (${log.userRole})</p>
+                </div>
+                <div>
+                  <p class="text-gray-500">Entity</p>
+                  <p class="font-medium">${log.entity} / ${log.entityId || 'N/A'}</p>
+                </div>
+                <div>
+                  <p class="text-gray-500">IP Address</p>
+                  <p class="font-mono">${log.ipAddress}</p>
+                </div>
+              </div>
+              ${Object.keys(log.metadata || {}).length > 0 ? `
+                <div>
+                  <p class="text-gray-500 mb-2">Metadata</p>
+                  <pre class="bg-gray-50 p-3 rounded-lg text-xs overflow-auto">${JSON.stringify(log.metadata, null, 2)}</pre>
+                </div>
+              ` : ''}
+              <div>
+                <p class="text-gray-500 mb-2">User Agent</p>
+                <p class="text-xs text-gray-600 break-all">${Utils.sanitizeHTML(log.userAgent || 'N/A')}</p>
+              </div>
+            </div>
+          `,
+          [{ label: 'Close', primary: true }]
+        );
+      },
+
+      export: () => {
+        const logs = AppState.auditLogs;
+        if (logs.length === 0) {
+          Toast.show('No logs to export', 'warning');
+          return;
+        }
+
+        const headers = ['Timestamp', 'User', 'Role', 'Action', 'Entity', 'Entity ID', 'IP Address'];
+        const rows = logs.map(log => [
+          log.timestamp,
+          log.userName,
+          log.userRole,
+          log.action,
+          log.entity,
+          log.entityId || '',
+          log.ipAddress
+        ]);
+
+        const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${v}"`).join(','))].join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `audit-logs-${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        AuditLogger.log('AUDIT_LOGS_EXPORTED', 'audit', null, { recordCount: logs.length });
+        Toast.show('Audit logs exported successfully!', 'success');
+      }
+    };
+
+    // ==========================================
+    // INITIALIZATION
+    // ==========================================
+
+    // Element SDK Handler
+    const elementHandler = {
+      onConfigChange: async (config) => {
+        AppState.config = { ...AppState.config, ...config };
+        
+        // Update visible elements
+        const institutionEls = document.querySelectorAll('#sidebar-institution, #login-institution');
+        institutionEls.forEach(el => {
+          if (el) el.textContent = config.institution_name || defaultConfig.institution_name;
+        });
+
+        const portalTitleEl = document.getElementById('login-portal-title');
+        if (portalTitleEl) portalTitleEl.textContent = config.portal_title || defaultConfig.portal_title;
+
+        // Apply font
+        const fontFamily = config.font_family || defaultConfig.font_family;
+        document.body.style.fontFamily = `${fontFamily}, Inter, system-ui, sans-serif`;
+
+        // Apply colors
+        const root = document.documentElement;
+        if (config.primary_color) root.style.setProperty('--color-primary', config.primary_color);
+        if (config.accent_color) root.style.setProperty('--color-accent', config.accent_color);
+      },
+
+      mapToCapabilities: (config) => ({
+        recolorables: [
+          {
+            get: () => config.primary_color || defaultConfig.primary_color,
+            set: (v) => window.elementSdk.setConfig({ primary_color: v })
+          },
+          {
+            get: () => config.secondary_color || defaultConfig.secondary_color,
+            set: (v) => window.elementSdk.setConfig({ secondary_color: v })
+          },
+          {
+            get: () => config.text_color || defaultConfig.text_color,
+            set: (v) => window.elementSdk.setConfig({ text_color: v })
+          },
+          {
+            get: () => config.accent_color || defaultConfig.accent_color,
+            set: (v) => window.elementSdk.setConfig({ accent_color: v })
+          },
+          {
+            get: () => config.surface_color || defaultConfig.surface_color,
+            set: (v) => window.elementSdk.setConfig({ surface_color: v })
+          }
+        ],
+        borderables: [],
+        fontEditable: {
+          get: () => config.font_family || defaultConfig.font_family,
+          set: (v) => window.elementSdk.setConfig({ font_family: v })
+        },
+        fontSizeable: undefined
+      }),
+
+      mapToEditPanelValues: (config) => new Map([
+        ['institution_name', config.institution_name || defaultConfig.institution_name],
+        ['portal_title', config.portal_title || defaultConfig.portal_title]
+      ])
+    };
+
+    // Data SDK Handler
+    const dataHandler = {
+      onDataChanged: (data) => {
+        // Restore state from persisted data
+        data.forEach(record => {
+          try {
+            const parsed = JSON.parse(record.data);
+            switch (record.type) {
+              case 'user':
+                if (!AppState.users.find(u => u.id === parsed.id)) {
+                  AppState.users.push(parsed);
+                }
+                break;
+              case 'policy':
+                const pIdx = AppState.policies.findIndex(p => p.id === parsed.id);
+                if (pIdx >= 0) {
+                  AppState.policies[pIdx] = parsed;
+                } else {
+                  AppState.policies.push(parsed);
+                }
+                break;
+              case 'policy_version':
+                if (!AppState.policyVersions.find(v => v.id === parsed.id)) {
+                  AppState.policyVersions.push(parsed);
+                }
+                break;
+              case 'acknowledgement':
+                if (!AppState.acknowledgements.find(a => a.id === parsed.id)) {
+                  AppState.acknowledgements.push(parsed);
+                }
+                break;
+              case 'audit_log':
+                if (!AppState.auditLogs.find(l => l.timestamp === parsed.timestamp)) {
+                  AppState.auditLogs.push(parsed);
+                }
+                break;
+            }
+          } catch (e) {
+            console.error('Error parsing record:', e);
+          }
+        });
+      }
+    };
+
+    // Initialize Application
+    async function initApp() {
+      // Initialize Element SDK
+      if (window.elementSdk) {
+        window.elementSdk.init({
+          defaultConfig,
+          onConfigChange: elementHandler.onConfigChange,
+          mapToCapabilities: elementHandler.mapToCapabilities,
+          mapToEditPanelValues: elementHandler.mapToEditPanelValues
+        });
+      }
+
+      // Initialize Data SDK
+      if (window.dataSdk) {
+        const result = await window.dataSdk.init(dataHandler);
+        if (!result.isOk) {
+          console.error('Failed to initialize Data SDK');
+        }
+      }
+
+      // Check for existing session
+      const token = localStorage.getItem('edu-grc-token');
+      if (token) {
+        const payload = JWT.verify(token);
+        if (payload) {
+          const user = AppState.users.find(u => u.id === payload.userId);
+          if (user) {
+            AppState.currentUser = user;
+            DashboardView.render();
+            return;
+          }
+        }
+        localStorage.removeItem('edu-grc-token');
+      }
+
+      // Show login
+      LoginView.render();
+    }
+
+    // Start the application
+    initApp();
+  </script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9d6f178b76488ef0',t:'MTc3MjYwODU0OS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
