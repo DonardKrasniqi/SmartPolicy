@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="sq" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Edu-GRC - Portali i Politikave</title>
+  <script src="https://cdn.tailwindcss.com/3.4.0"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#1e3a5f',
+            secondary: '#2d5a87',
+            accent: '#3b82f6',
+            surface: '#f8fafc',
+            text: '#1e293b',
+            success: '#059669',
+            warning: '#d97706',
+            danger: '#dc2626'
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            display: ['Playfair Display', 'serif']
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    html, body { height: 100%; margin: 0; }
+    .app-wrapper { height: 100%; overflow: hidden; }
+    .toast { animation: slideIn 0.3s ease-out; }
+    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-in { animation: fadeIn 0.3s ease-out; }
+    .rich-editor { min-height: 320px; outline: none; }
+    .policy-content { line-height: 1.8; }
+    .policy-content h1 { font-size: 1.6rem; font-weight: 700; margin: 1.5rem 0 1rem; }
+    .policy-content h2 { font-size: 1.35rem; font-weight: 600; margin: 1.25rem 0 0.75rem; }
+    .policy-content p { margin-bottom: 1.1rem; }
+    .policy-content ul, .policy-content ol { margin: 0.8rem 0 0.8rem 2rem; }
+    .policy-content li { margin-bottom: 0.4rem; }
+  </style>
+</head>
+<body class="h-full bg-surface font-sans text-text antialiased">
+
+<div id="app" class="app-wrapper"></div>
+
+<script>
+// ────────────────────────────────────────────────
+//              EDU-GRC – LOCALSTORAGE ONLY
+// ────────────────────────────────────────────────
+
+const STORAGE_KEY = 'edugrc-local-v2025';
+
+let state = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {
+  currentUser: null,
+  users: [],
+  policies: [],
+  acknowledgements: [],
+  auditLogs: [],
+  roles: [
+    { id: 'admin',    name: 'Administrator', permissions: ['all'] },
+    { id: 'staff',    name: 'Staf',          permissions: ['view_policies','sign_policies'] },
+    { id: 'student',  name: 'Student',       permissions: ['view_policies','sign_policies'] },
+    { id: 'auditor',  name: 'Auditor',       permissions: ['view_audit','export_logs'] }
+  ],
+  config: {
+    institution_name: 'Shkolla Example',
+    portal_title: 'Portali i Politikave & Pajtueshmërisë'
+  }
+};
+
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+// ──── Utilities ────────────────────────────────────────
+const u = {
+  id:        () => Date.now() + '-' + Math.random().toString(36).slice(2,10),
+  date:      d => new Date(d).toLocaleString('sq-AL',{dateStyle:'medium',timeStyle:'short'}),
+  dateShort: d => new Date(d).toLocaleDateString('sq-AL'),
+  hash: async pw => {
+    const buf = new TextEncoder().encode(pw + 'grc-salt-2025');
+    const hash = await crypto.subtle.digest('SHA-256', buf);
+    return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  },
+  ip:        () => `192.168.${Math.floor(Math.random()*255)}.${Math.floor(Math.random()*255)}`,
+  sanitize:  s  => { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+};
+
+// ──── Toast ────────────────────────────────────────────
+function toast(msg, type='info') {
+  const colors = { success:'bg-success', error:'bg-danger', warning:'bg-warning', info:'bg-accent' };
+  const el = document.createElement('div');
+  el.className = `fixed top-5 right-5 z-50 px-5 py-3.5 rounded-xl shadow-xl text-white flex items-center gap-3 min-w-[320px] ${colors[type]} toast`;
+  el.innerHTML = `<span class="flex-1">${msg}</span><button class="text-lg opacity-80 hover:opacity-100">×</button>`;
+  document.body.appendChild(el);
+  el.querySelector('button').onclick = ()=>el.remove();
+  setTimeout(()=>el.remove(), 4800);
+}
+
+// ──── Modal ────────────────────────────────────────────
+function modal(title, html, buttons=[]) {
+  const ov = document.createElement('div');
+  ov.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 fade-in p-4';
+  ov.innerHTML = `
+    <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[92vh] overflow-auto">
+      <div class="p-6 border-b border-gray-200">
+        <h3 class="text-xl font-semibold text-primary">${u.sanitize(title)}</h3>
+      </div>
+      <div class="p-6">${html}</div>
+      <div class="p-5 border-t flex justify-end gap-3">
+        ${buttons.map(b=>`<button class="px-5 py-2.5 rounded-lg font-medium ${b.primary?'bg-accent text-white hover:bg-blue-700':'bg-gray-200 text-gray-700 hover:bg-gray-300'}">${b.label}</button>`).join('')}
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  ov.onclick = e=> { if(e.target===ov) ov.remove(); };
+  const btns = ov.querySelectorAll('button');
+  buttons.forEach((b,i)=> btns[i].onclick = ()=>{ if(b.action) b.action(); ov.remove(); });
+}
+
+// ──── RBAC ─────────────────────────────────────────────
+const can = {
+  managePolicies: () => state.currentUser && (state.currentUser.role==='admin'),
+  signPolicies:   () => state.currentUser && ['admin','staff','student'].includes(state.currentUser.role),
+  viewAudit:      () => state.currentUser && ['admin','auditor'].includes(state.currentUser.role)
+};
+
+// ──── Audit ────────────────────────────────────────────
+function logAudit(action, entity, entityId, meta={}) {
+  state.auditLogs.push({
+    timestamp: new Date().toISOString(),
+    userId:    state.currentUser?.id || 'system',
+    userName:  state.currentUser?.name || 'Sistem',
+    userRole:  state.currentUser?.role || 'system',
+    action,
+    entity,
+    entityId,
+    ip:        u.ip(),
+    ua:        navigator.userAgent.slice(0,120),
+    meta
+  });
+  saveState();
+}
+
+// ──── Navigation & Layout ──────────────────────────────
+function renderLayout(content, active='dashboard') {
+  const user = state.currentUser;
+  if (!user) return Login.render();
+
+  const nav = [
+    {id:'dashboard', label:'Ballina',     icon:'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6'},
+    {id:'policies',  label:'Politikat',   icon:'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z', show: true},
+    {id:'pending',   label:'Nënshkrime',  icon:'M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z', show: can.signPolicies()},
+    {id:'audit',     label:'Audit',       icon:'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01', show: can.viewAudit()}
+  ].filter(n=>n.show!==false);
+
+  document.getElementById('app').innerHTML = `
+<div class="flex h-full">
+  <!-- Sidebar -->
+  <aside class="w-64 bg-primary flex flex-col">
+    <div class="p-6 border-b border-white/10">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
+          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+        </div>
+        <div>
+          <h1 class="text-white font-semibold">${state.config.institution_name}</h1>
+          <p class="text-white/60 text-sm">Edu-GRC</p>
+        </div>
+      </div>
+    </div>
+    <nav class="flex-1 p-4 space-y-1">
+      ${nav.map(n=>`
+        <button onclick="navTo('${n.id}')" class="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left ${active===n.id?'bg-white/20 text-white':'text-white/80 hover:bg-white/10 hover:text-white'}">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${n.icon}"/></svg>
+          <span>${n.label}</span>
+        </button>
+      `).join('')}
+    </nav>
+    <div class="p-5 border-t border-white/10">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 bg-accent rounded-full flex items-center justify-center text-white font-bold">
+          ${user.name.split(' ').map(w=>w[0]).join('').toUpperCase()}
+        </div>
+        <div class="min-w-0">
+          <p class="text-white truncate">${u.sanitize(user.name)}</p>
+          <p class="text-white/60 text-sm">${state.roles.find(r=>r.id===user.role)?.name || user.role}</p>
+        </div>
+      </div>
+      <button onclick="logout()" class="w-full py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-lg flex items-center justify-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7"/></svg>
+        Dil
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="flex-1 overflow-auto p-6 lg:p-8 bg-surface">
+    <div class="max-w-7xl mx-auto fade-in">
+      ${content}
+    </div>
+  </main>
+</div>`;
+}
+
+// ──── Navigation ───────────────────────────────────────
+function navTo(view) {
+  switch(view){
+    case 'dashboard': Dashboard(); break;
+    case 'policies':  Policies();  break;
+    case 'pending':   Pending();   break;
+    case 'audit':     Audit();     break;
+    default:          Dashboard();
+  }
+}
+
+function logout() {
+  logAudit('LOGOUT','user',state.currentUser.id);
+  state.currentUser = null;
+  localStorage.removeItem('edugrc-token');
+  toast('Jeni çkyçur','info');
+  Login();
+}
+
+// ──── Login ────────────────────────────────────────────
+function Login() {
+  document.getElementById('app').innerHTML = `
+<div class="min-h-screen bg-gradient-to-br from-primary via-secondary to-primary flex items-center justify-center p-5">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden fade-in">
+    <div class="bg-primary p-10 text-center">
+      <div class="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-6">
+        <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+      </div>
+      <h1 class="text-3xl font-display font-bold text-white">${state.config.institution_name}</h1>
+      <p class="text-white/80 mt-2">${state.config.portal_title}</p>
+    </div>
+    <div class="p-10">
+      <h2 class="text-2xl font-semibold mb-8 text-center">Kyçuni</h2>
+      <form id="loginForm" class="space-y-5">
+        <input id="lemail"    type="email"    required placeholder="email@shkolla.com" class="w-full px-5 py-4 border rounded-xl focus:ring-2 focus:ring-accent focus:border-transparent">
+        <input id="lpassword" type="password" required placeholder="••••••••" class="w-full px-5 py-4 border rounded-xl focus:ring-2 focus:ring-accent focus:border-transparent">
+        <button type="submit" class="w-full py-4 bg-accent text-white rounded-xl font-semibold hover:bg-blue-600 transition">Kyçuni</button>
+      </form>
+      <p class="mt-6 text-center text-gray-600">
+        Nuk keni llogari? <button onclick="Register()" class="text-accent hover:underline font-medium">Regjistrohuni</button>
+      </p>
+      <div class="mt-10 pt-6 border-t text-center">
+        <p class="text-sm text-gray-500 mb-4">Llogari demo (klikoni):</p>
+        <div class="grid grid-cols-2 gap-3 text-sm">
+          <button onclick="demoLogin('admin')"    class="p-3 bg-primary/10 rounded-lg text-primary hover:bg-primary/20">Admin</button>
+          <button onclick="demoLogin('staff')"    class="p-3 bg-secondary/10 rounded-lg text-secondary hover:bg-secondary/20">Staf</button>
+          <button onclick="demoLogin('student')"  class="p-3 bg-success/10 rounded-lg text-success hover:bg-success/20">Student</button>
+          <button onclick="demoLogin('auditor')"  class="p-3 bg-warning/10 rounded-lg text-warning hover:bg-warning/20">Auditor</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>`;
+
+  document.getElementById('loginForm').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const email = document.getElementById('lemail').value.trim();
+    const pw    = document.getElementById('lpassword').value;
+    const hash  = await u.hash(pw);
+    const user  = state.users.find(u=>u.email===email && u.passwordHash===hash);
+    if(user){
+      state.currentUser = user;
+      localStorage.setItem('edugrc-token', 'token-'+user.id); // dummy
+      logAudit('LOGIN','user',user.id,{method:'password'});
+      toast(`Mirë se vini, ${user.name.split(' ')[0]}!`,'success');
+      Dashboard();
+    } else {
+      toast('Email ose fjalëkalim i pasaktë','error');
+    }
+  });
+}
+
+async function demoLogin(role) {
+  const map = {
+    admin:   {email:'admin@ex.com',   pw:'admin123',   name:'Dr. Arben Hoxha',   role:'admin'},
+    staff:   {email:'staff@ex.com',   pw:'staff123',   name:'Znj. Valbona K.',    role:'staff'},
+    student: {email:'student@ex.com', pw:'student123', name:'Era Mustafa',        role:'student'},
+    auditor: {email:'audit@ex.com',   pw:'audit123',   name:'Liridon Berisha',    role:'auditor'}
+  };
+  const d = map[role];
+  let user = state.users.find(u=>u.email===d.email);
+  if(!user){
+    user = {
+      id: u.id(),
+      email: d.email,
+      name: d.name,
+      role: d.role,
+      passwordHash: await u.hash(d.pw),
+      createdAt: new Date().toISOString()
+    };
+    state.users.push(user);
+    saveState();
+  }
+  state.currentUser = user;
+  localStorage.setItem('edugrc-token','token-'+user.id);
+  logAudit('LOGIN_DEMO','user',user.id);
+  toast(`Mirë se vini, ${user.name.split(' ')[0]}! (demo)`,'success');
+  Dashboard();
+}
+
+function Register() {
+  document.getElementById('app').innerHTML = `
+<div class="min-h-screen bg-gradient-to-br from-primary via-secondary to-primary flex items-center justify-center p-5">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-10 fade-in">
+    <h1 class="text-3xl font-display font-bold text-primary text-center">${state.config.institution_name}</h1>
+    <p class="text-center text-gray-600 mb-8">${state.config.portal_title}</p>
+    <h2 class="text-2xl font-semibold mb-8 text-center">Regjistrohuni</h2>
+    <form id="regForm" class="space-y-5">
+      <input id="rname"     type="text"     required placeholder="Emri dhe mbiemri" class="w-full px-5 py-4 border rounded-xl">
+      <input id="remail"    type="email"    required placeholder="email@shkolla.com" class="w-full px-5 py-4 border rounded-xl">
+      <input id="rpassword" type="password" required minlength="6" placeholder="Fjalëkalim (min 6)" class="w-full px-5 py-4 border rounded-xl">
+      <select id="rrole" required class="w-full px-5 py-4 border rounded-xl">
+        <option value="staff">Staf</option>
+        <option value="student">Student</option>
+      </select>
+      <button type="submit" class="w-full py-4 bg-accent text-white rounded-xl font-semibold hover:bg-blue-600">Krijo llogari</button>
+    </form>
+    <p class="mt-6 text-center text-gray-600">
+      Keni llogari? <button onclick="Login()" class="text-accent hover:underline">Kyçuni</button>
+    </p>
+  </div>
+</div>`;
+
+  document.getElementById('regForm').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const name = document.getElementById('rname').value.trim();
+    const email= document.getElementById('remail').value.trim();
+    const pw   = document.getElementById('rpassword').value;
+    const role = document.getElementById('rrole').value;
+
+    if(state.users.some(u=>u.email===email)){
+      return toast('Ky email është regjistruar tashmë','error');
+    }
+
+    const user = {
+      id: u.id(),
+      email, name, role,
+      passwordHash: await u.hash(pw),
+      createdAt: new Date().toISOString()
+    };
+
+    state.users.push(user);
+    saveState();
+    logAudit('USER_REGISTER','user',user.id,{email,role});
+    toast('Llogaria u krijua! Mund të kyçeni tani.','success');
+    Login();
+  });
+}
+
+// ──── Dashboard ────────────────────────────────────────
+function Dashboard() {
+  const user = state.currentUser;
+  const published = state.policies.filter(p=>p.status==='published');
+  const myAcks    = state.acknowledgements.filter(a=>a.userId===user.id);
+  const pending   = published.filter(p=>!myAcks.some(a=>a.policyId===p.id)).length;
+
+  let stats = '';
+  if(user.role==='admin'){
+    const totalUsers = state.users.length;
+    const totalAcks  = state.acknowledgements.length;
+    const compliance = published.length>0 ? Math.round(totalAcks / (published.length * state.users.filter(u=>!['admin','auditor'].includes(u.role)).length) * 100) : 100;
+
+    stats = `
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+  <div class="bg-white p-6 rounded-xl shadow-sm border">
+    <p class="text-sm text-gray-500">Politika gjithsej</p>
+    <p class="text-3xl font-bold mt-1">${state.policies.length}</p>
+  </div>
+  <div class="bg-white p-6 rounded-xl shadow-sm border">
+    <p class="text-sm text-gray-500">Përdorues</p>
+    <p class="text-3xl font-bold mt-1">${totalUsers}</p>
+  </div>
+  <div class="bg-white p-6 rounded-xl shadow-sm border">
+    <p class="text-sm text-gray-500">Nënshkrime</p>
+    <p class="text-3xl font-bold mt-1">${totalAcks}</p>
+  </div>
+  <div class="bg-white p-6 rounded-xl shadow-sm border">
+    <p class="text-sm text-gray-500">Pajtueshmëri</p>
+    <p class="text-3xl font-bold mt-1">${compliance}%</p>
+  </div>
+</div>`;
+  } else {
+    stats = `
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+  <div class="bg-white p-6 rounded-xl shadow-sm border ${pending>0?'border-warning/30 bg-warning/5':''}">
+    <p class="text-sm text-gray-500">Në pritje</p>
+    <p class="text-3xl font-bold mt-1 ${pending>0?'text-warning':''}">${pending}</p>
+  </div>
+  <div class="bg-white p-6 rounded-xl shadow-sm border">
+    <p class="text-sm text-gray-500">Të nënshkruara</p>
+    <p class="text-3xl font-bold mt-1">${myAcks.length}</p>
+  </div>
+  <div class="bg-white p-6 rounded-xl shadow-sm border">
+    <p class="text-sm text-gray-500">Politika aktive</p>
+    <p class="text-3xl font-bold mt-1">${published.length}</p>
+  </div>
+</div>`;
+  }
+
+  const recentPolicies = published.slice(-4).reverse();
+
+  renderLayout(`
+<h1 class="text-3xl font-display font-bold text-primary mb-2">Përshëndetje, ${user.name.split(' ')[0]}!</h1>
+<p class="text-gray-600 mb-8">Këtu është përmbledhja e sotme e portalit.</p>
+
+${stats}
+
+${pending>0 && !['admin','auditor'].includes(user.role) ? `
+<div class="bg-warning/10 border border-warning/30 rounded-xl p-6 mb-10 flex items-center gap-5">
+  <div class="w-14 h-14 bg-warning/20 rounded-full flex items-center justify-center flex-shrink-0">
+    <svg class="w-7 h-7 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+  </div>
+  <div class="flex-1">
+    <p class="font-semibold text-warning text-lg">Duhet veprim</p>
+    <p class="text-gray-700">Ke <strong>${pending}</strong> politi(kë) për t'i nënshkruar.</p>
+  </div>
+  <button onclick="navTo('pending')" class="px-6 py-3 bg-warning text-white rounded-lg hover:bg-orange-700 transition">Shiko tani</button>
+</div>` : ''}
+
+<div class="grid lg:grid-cols-2 gap-8">
+  <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+    <div class="p-6 border-b flex items-center justify-between">
+      <h2 class="font-semibold text-lg">Politikat e fundit</h2>
+      <button onclick="navTo('policies')" class="text-accent hover:underline text-sm">Të gjitha</button>
+    </div>
+    ${recentPolicies.length===0 ? `
+    <div class="p-10 text-center text-gray-500">Asnjë politikë e publikuar ende.</div>` : `
+    <div class="divide-y">
+      ${recentPolicies.map(p=>`
+      <div onclick="viewPolicy('${p.id}')" class="p-5 hover:bg-gray-50 cursor-pointer flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <div class="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+            <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          </div>
+          <div>
+            <p class="font-medium">${u.sanitize(p.title)}</p>
+            <p class="text-sm text-gray-500">v${p.version} • ${u.dateShort(p.updatedAt)}</p>
+          </div>
+        </div>
+        ${myAcks.some(a=>a.policyId===p.id)?'<span class="text-xs bg-success/10 text-success px-3 py-1 rounded-full">Nënshkruar</span>':'<span class="text-xs bg-warning/10 text-warning px-3 py-1 rounded-full">Në pritje</span>'}
+      </div>`).join('')}
+    </div>`}
+  </div>
+
+  <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+    <div class="p-6 border-b flex items-center justify-between">
+      <h2 class="font-semibold text-lg">Aktiviteti i fundit</h2>
+      ${can.viewAudit() ? `<button onclick="navTo('audit')" class="text-accent hover:underline text-sm">Të gjitha</button>` : ''}
+    </div>
+    <div class="divide-y">
+      ${state.auditLogs.slice(-6).reverse().map(l=>`
+      <div class="p-5 flex items-start gap-4">
+        <div class="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+          <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm"><span class="font-medium">${u.sanitize(l.userName)}</span> <span class="text-gray-600">${l.action.replace(/_/g,' ').toLowerCase()}</span></p>
+          <p class="text-xs text-gray-500 mt-0.5">${u.date(l.timestamp)}</p>
+        </div>
+      </div>`).join('') || '<div class="p-10 text-center text-gray-500">Asnjë aktivitet ende.</div>'}
+    </div>
+  </div>
+</div>`, 'dashboard');
+}
+
+// ──── Policies List ────────────────────────────────────
+function Policies() {
+  const isAdmin = can.managePolicies();
+  const getBadge = s => ({
+    draft:     'bg-gray-100 text-gray-700',
+    review:    'bg-yellow-100 text-yellow-700',
+    published: 'bg-green-100 text-green-700'
+  })[s] || 'bg-gray-100 text-gray-700';
+
+  renderLayout(`
+<div class="flex items-center justify-between mb-8">
+  <div>
+    <h1 class="text-3xl font-display font-bold text-primary">Politikat</h1>
+    <p class="text-gray-600 mt-1">Menaxho politikat dhe dokumentet e pajtueshmërisë</p>
+  </div>
+  ${isAdmin?`
+  <button onclick="editPolicy()" class="flex items-center gap-2 px-5 py-3 bg-accent text-white rounded-xl hover:bg-blue-600 transition">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+    Politika e re
+  </button>`:''}
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+  ${state.policies.length===0 ? `
+  <div class="col-span-full bg-white rounded-xl p-12 text-center border">
+    <div class="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-5">
+      <svg class="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+    </div>
+    <h3 class="text-xl font-semibold text-gray-700 mb-3">Asnjë politikë ende</h3>
+    <p class="text-gray-500 mb-6">Fillo duke krijuar politikën e parë.</p>
+    ${isAdmin?`<button onclick="editPolicy()" class="px-6 py-3 bg-accent text-white rounded-xl hover:bg-blue-600">Krijo politikën e parë</button>`:''}
+  </div>` : state.policies.map(p=>`
+  <div onclick="viewPolicy('${p.id}')" class="bg-white rounded-xl shadow-sm border overflow-hidden hover:shadow-md transition cursor-pointer">
+    <div class="p-6">
+      <div class="flex justify-between items-start mb-4">
+        <span class="px-3 py-1 text-xs font-medium rounded-full ${getBadge(p.status)}">${p.status}</span>
+        <span class="text-xs text-gray-500">v${p.version}</span>
+      </div>
+      <h3 class="font-semibold text-lg mb-2 line-clamp-2">${u.sanitize(p.title)}</h3>
+      <p class="text-sm text-gray-600 line-clamp-2 mb-4">${u.sanitize(p.description||'Pa përshkrim')}</p>
+      <div class="flex justify-between text-xs text-gray-500">
+        <span>Përditësuar ${u.dateShort(p.updatedAt)}</span>
+        ${isAdmin && p.status!=='published' ? `<button onclick="event.stopPropagation(); editPolicy('${p.id}')" class="text-accent hover:underline">Ndrysho</button>` : ''}
+      </div>
+    </div>
+  </div>`).join('')}
+</div>`, 'policies');
+}
+
+// ──── Policy Editor ────────────────────────────────────
+function editPolicy(id='') {
+  const policy = id ? state.policies.find(p=>p.id===id) : null;
+  const isNew = !policy;
+
+  renderLayout(`
+<div class="max-w-5xl mx-auto">
+  <div class="flex items-center gap-4 mb-8">
+    <button onclick="navTo('policies')" class="w-11 h-11 bg-gray-100 rounded-xl flex items-center justify-center hover:bg-gray-200 transition">
+      <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+    </button>
+    <div>
+      <h1 class="text-3xl font-display font-bold text-primary">${isNew?'Politikë e re':'Ndrysho politikën'}</h1>
+      <p class="text-gray-600 mt-1">${isNew?'Krijo një dokument të ri.':'Ndryshimi i: ' + u.sanitize(policy.title)}</p>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-xl shadow-sm border p-8">
+    <form id="policyForm" class="space-y-8">
+      <div class="grid md:grid-cols-2 gap-6">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Titulli *</label>
+          <input id="ptitle" type="text" required value="${policy? u.sanitize(policy.title):''}" class="w-full px-5 py-4 border rounded-xl focus:ring-2 focus:ring-accent">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Statusi</label>
+          <select id="pstatus" class="w-full px-5 py-4 border rounded-xl">
+            <option value="draft"     ${policy?.status==='draft'?'selected':''}>Draft</option>
+            <option value="review"    ${policy?.status==='review'?'selected':''}>Në shqyrtim</option>
+            <option value="published" ${policy?.status==='published'?'selected':''}>Publikuar</option>
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">Përshkrim i shkurtër</label>
+        <textarea id="pdesc" rows="3" class="w-full px-5 py-4 border rounded-xl focus:ring-2 focus:ring-accent">${policy?.description||''}</textarea>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">Përmbajtja e plotë *</label>
+        <div class="border rounded-xl overflow-hidden">
+          <div class="bg-gray-50 border-b p-3 flex gap-2 flex-wrap">
+            <button type="button" onclick="document.execCommand('bold')"     class="p-2 hover:bg-gray-200 rounded" title="Bold">B</button>
+            <button type="button" onclick="document.execCommand('italic')"   class="p-2 hover:bg-gray-200 rounded" title="Italic">I</button>
+            <button type="button" onclick="document.execCommand('underline')" class="p-2 hover:bg-gray-200 rounded" title="Underline">U</button>
+            <div class="w-px bg-gray-300 mx-1 my-1"></div>
+            <button type="button" onclick="document.execCommand('insertUnorderedList')" class="p-2 hover:bg-gray-200 rounded" title="Listë me pika">•</button>
+            <button type="button" onclick="document.execCommand('insertOrderedList')"  class="p-2 hover:bg-gray-200 rounded" title="Listë e numëruar">1.</button>
+          </div>
+          <div id="pcontent" contenteditable="true" class="rich-editor p-6 policy-content focus:ring-2 focus:ring-accent min-h-[400px]">
+            ${policy?.content || '<p>Shkruaj përmbajtjen e politikës këtu...</p>'}
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-between pt-6 border-t">
+        <button type="button" onclick="navTo('policies')" class="px-6 py-3 text-gray-700 hover:bg-gray-100 rounded-xl transition">Anulo</button>
+        <div class="flex gap-4">
+          ${!isNew && policy?.status!=='published' ? `
+          <button type="button" onclick="publishPolicy('${id}')" class="px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700">Publiko</button>` : ''}
+          <button type="submit" class="px-8 py-3 bg-accent text-white rounded-xl hover:bg-blue-700">Ruaj ${isNew?'':'ndryshimet'}</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>`, 'policies');
+
+  document.getElementById('policyForm').addEventListener('submit', e=>{
+    e.preventDefault();
+    const title   = document.getElementById('ptitle').value.trim();
+    const status  = document.getElementById('pstatus').value;
+    const desc    = document.getElementById('pdesc').value.trim();
+    const content = document.getElementById('pcontent').innerHTML;
+
+    if(!title || !content.trim()) return toast('Titulli dhe përmbajtja janë të detyrueshme','error');
+
+    const now = new Date().toISOString();
+
+    let pol;
+    if(isNew){
+      pol = {
+        id: u.id(),
+        title, description:desc, content, status,
+        version: '1.0',
+        createdAt: now,
+        updatedAt: now,
+        createdBy: state.currentUser.id
+      };
+      state.policies.push(pol);
+    } else {
+      pol = state.policies.find(p=>p.id===id);
+      pol.title       = title;
+      pol.description = desc;
+      pol.content     = content;
+      pol.status      = status;
+      pol.updatedAt   = now;
+      if(status==='published' && pol.status!=='published'){
+        pol.publishedAt = now;
+      }
+    }
+
+    saveState();
+    logAudit(isNew?'POLICY_CREATE':'POLICY_UPDATE','policy',pol.id,{title:pol.title,status:pol.status});
+    toast(`Politika u ${isNew?'krijua':'përditësua'} me sukses`,'success');
+    navTo('policies');
+  });
+}
+
+// ──── Publish Policy ───────────────────────────────────
+function publishPolicy(id) {
+  modal('Konfirmo publikimin', `
+<p class="text-gray-600 mb-4">Jeni të sigurt që doni ta publikoni këtë politikë?</p>
+<p class="text-sm text-yellow-700 bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+  <strong>Vini re:</strong> Pas publikimit politika do të jetë e detyrueshme për nënshkrim nga përdoruesit përkatës.
+</p>`, [
+    {label:'Anulo'},
+    {label:'Po, publiko', primary:true, action:()=>{
+      const pol = state.policies.find(p=>p.id===id);
+      if(pol){
+        pol.status = 'published';
+        pol.publishedAt = new Date().toISOString();
+        pol.updatedAt   = new Date().toISOString();
+        saveState();
+        logAudit('POLICY_PUBLISH','policy',id,{title:pol.title});
+        toast('Politika u publikua!','success');
+        navTo('policies');
+      }
+    }}
+  ]);
+}
+
+// ──── View Single Policy ───────────────────────────────
+function viewPolicy(id) {
+  const pol = state.policies.find(p=>p.id===id);
+  if(!pol) return toast('Politika nuk u gjet','error');
+
+  const user = state.currentUser;
+  const already = state.acknowledgements.some(a=>a.policyId===id && a.userId===user.id);
+  const canSign = can.signPolicies() && pol.status==='published' && !already;
+
+  renderLayout(`
+<div class="max-w-5xl mx-auto">
+  <div class="flex items-center justify-between mb-8">
+    <div class="flex items-center gap-5">
+      <button onclick="navTo('policies')" class="w-11 h-11 bg-gray-100 rounded-xl flex items-center justify-center hover:bg-gray-200">
+        <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+      </button>
+      <div>
+        <h1 class="text-3xl font-display font-bold text-primary">${u.sanitize(pol.title)}</h1>
+        <p class="text-gray-600 mt-1">Versioni ${pol.version} • Përditësuar ${u.date(pol.updatedAt)}</p>
+      </div>
+    </div>
+    ${can.managePolicies() && pol.status!=='published' ? `
+    <button onclick="editPolicy('${id}')" class="px-6 py-3 bg-accent text-white rounded-xl hover:bg-blue-600">Ndrysho</button>` : ''}
+  </div>
+
+  ${already ? `
+  <div class="bg-green-50 border border-green-200 rounded-xl p-6 mb-8 flex items-center gap-5">
+    <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+      <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+    </div>
+    <div>
+      <p class="font-semibold text-green-700 text-lg">E ke nënshkruar këtë politikë</p>
+      <p class="text-gray-600">Nënshkruar më ${u.date(state.acknowledgements.find(a=>a.policyId===id && a.userId===user.id).signedAt)}</p>
+    </div>
+  </div>` : ''}
+
+  <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+    <div class="p-8 lg:p-12 policy-content prose max-w-none">
+      ${pol.content}
+    </div>
+
+    ${canSign ? `
+    <div class="p-8 bg-gray-50 border-t">
+      <div class="flex items-start gap-4 mb-6">
+        <input type="checkbox" id="agreeChk" class="w-5 h-5 text-accent rounded border-gray-300 mt-1">
+        <label for="agreeChk" class="text-gray-700">
+          Kam lexuar, kuptuar dhe angazhohem të respektoj këtë politikë. E kuptoj që nënshkrimi im do të regjistrohet me emër, datë dhe IP.
+        </label>
+      </div>
+      <button id="signBtn" disabled onclick="acknowledge('${id}')" class="w-full py-4 bg-accent text-white rounded-xl font-semibold hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed">
+        Dakord & Nënshkruaj
+      </button>
+    </div>` : ''}
+  </div>
+</div>`, 'policies');
+
+  const chk = document.getElementById('agreeChk');
+  const btn = document.getElementById('signBtn');
+  if(chk && btn){
+    chk.onchange = ()=> btn.disabled = !chk.checked;
+  }
+}
+
+function acknowledge(id) {
+  const btn = document.getElementById('signBtn');
+  if(btn) btn.disabled=true;
+
+  const ack = {
+    id: u.id(),
+    policyId: id,
+    userId:   state.currentUser.id,
+    userName: state.currentUser.name,
+    signedAt: new Date().toISOString(),
+    ip:       u.ip(),
+    ua:       navigator.userAgent.slice(0,120)
+  };
+
+  state.acknowledgements.push(ack);
+  saveState();
+  logAudit('POLICY_ACK','acknowledgement',ack.id,{policyId:id});
+
+  toast('Politika u nënshkrua me sukses!','success');
+  viewPolicy(id);
+}
+
+// ──── Pending Signatures ───────────────────────────────
+function Pending() {
+  const user = state.currentUser;
+  const published = state.policies.filter(p=>p.status==='published');
+  const signedIds = new Set(state.acknowledgements.filter(a=>a.userId===user.id).map(a=>a.policyId));
+  const pending   = published.filter(p=>!signedIds.has(p.id));
+  const signed    = published.filter(p=> signedIds.has(p.id));
+
+  renderLayout(`
+<h1 class="text-3xl font-display font-bold text-primary mb-2">Nënshkrimet e mia</h1>
+<p class="text-gray-600 mb-10">Shiko dhe nënshkruaj politikat që të presin.</p>
+
+<div class="space-y-10">
+  <div>
+    <h2 class="text-xl font-semibold mb-5 flex items-center gap-3">
+      <span class="w-8 h-8 bg-warning rounded-full text-white text-sm flex items-center justify-center">${pending.length}</span>
+      Në pritje të nënshkrimit
+    </h2>
+    ${pending.length===0 ? `
+    <div class="bg-white rounded-xl p-12 text-center border shadow-sm">
+      <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-5">
+        <svg class="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+      </div>
+      <h3 class="text-xl font-semibold text-gray-700 mb-3">Gjithçka është në rregull!</h3>
+      <p class="text-gray-600">Ke nënshkruar të gjitha politikat aktive.</p>
+    </div>` : `
+    <div class="space-y-5">
+      ${pending.map(p=>`
+      <div class="bg-white rounded-xl p-7 border border-warning/30 hover:shadow-md transition">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+          <div>
+            <h3 class="font-semibold text-lg mb-2">${u.sanitize(p.title)}</h3>
+            <p class="text-gray-600 mb-3">${u.sanitize(p.description||'Pa përshkrim')}</p>
+            <div class="text-sm text-gray-500 flex gap-5">
+              <span>Versioni ${p.version}</span>
+              <span>Publikuar ${u.dateShort(p.publishedAt||p.updatedAt)}</span>
+            </div>
+          </div>
+          <button onclick="viewPolicy('${p.id}')" class="px-6 py-3 bg-warning text-white rounded-xl hover:bg-orange-700 whitespace-nowrap">
+            Shiko & Nënshkruaj
+          </button>
+        </div>
+      </div>`).join('')}
+    </div>`}
+  </div>
+
+  <div>
+    <h2 class="text-xl font-semibold mb-5 flex items-center gap-3">
+      <span class="w-8 h-8 bg-green-600 rounded-full text-white text-sm flex items-center justify-center">${signed.length}</span>
+      Politika të nënshkruara
+    </h2>
+    ${signed.length===0 ? `
+    <div class="bg-white rounded-xl p-12 text-center border shadow-sm text-gray-500">
+      Ende nuk ke nënshkruar asnjë politikë.
+    </div>` : `
+    <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+      <table class="w-full text-left">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-7 py-4 text-sm font-medium text-gray-500 uppercase">Politika</th>
+            <th class="px-7 py-4 text-sm font-medium text-gray-500 uppercase">Versioni</th>
+            <th class="px-7 py-4 text-sm font-medium text-gray-500 uppercase">Data e nënshkrimit</th>
+            <th class="px-7 py-4"></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y">
+          ${signed.map(p=>{
+            const a = state.acknowledgements.find(a=>a.policyId===p.id && a.userId===user.id);
+            return `
+            <tr class="hover:bg-gray-50">
+              <td class="px-7 py-5 font-medium">${u.sanitize(p.title)}</td>
+              <td class="px-7 py-5 text-gray-600">v${p.version}</td>
+              <td class="px-7 py-5 text-gray-600">${u.date(a.signedAt)}</td>
+              <td class="px-7 py-5">
+                <button onclick="viewPolicy('${p.id}')" class="text-accent hover:underline">Shiko</button>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`}
+  </div>
+</div>`, 'pending');
+}
+
+// ──── Audit Logs ───────────────────────────────────────
+function Audit() {
+  if(!can.viewAudit()) return navTo('dashboard');
+
+  const logs = [...state.auditLogs].reverse().slice(0,80);
+
+  renderLayout(`
+<h1 class="text-3xl font-display font-bold text-primary mb-2">Regjistri i auditimit</h1>
+<p class="text-gray-600 mb-10">Regjistrim i pandryshueshëm i aktiviteteve të sistemit</p>
+
+<div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+  ${logs.length===0 ? `
+  <div class="p-16 text-center text-gray-500">Asnjë veprim i regjistruar ende.</div>` : `
+  <div class="overflow-x-auto">
+    <table class="w-full text-left min-w-max">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-6 py-4 text-xs font-medium text-gray-500 uppercase">Kohë</th>
+          <th class="px-6 py-4 text-xs font-medium text-gray-500 uppercase">Përdorues</th>
+          <th class="px-6 py-4 text-xs font-medium text-gray-500 uppercase">Veprim</th>
+          <th class="px-6 py-4 text-xs font-medium text-gray-500 uppercase">Entitet</th>
+          <th class="px-6 py-4 text-xs font-medium text-gray-500 uppercase">IP</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y">
+        ${logs.map(l=>`
+        <tr class="hover:bg-gray-50">
+          <td class="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">${u.date(l.timestamp)}</td>
+          <td class="px-6 py-4">
+            <div class="font-medium">${u.sanitize(l.userName)}</div>
+            <div class="text-xs text-gray-500">${l.userRole}</div>
+          </td>
+          <td class="px-6 py-4">
+            <span class="px-3 py-1 text-xs rounded-full bg-gray-100 text-gray-700">${l.action.replace(/_/g,' ')}</span>
+          </td>
+          <td class="px-6 py-4 text-sm text-gray-600">${l.entity || '-'}</td>
+          <td class="px-6 py-4 text-sm font-mono text-gray-600">${l.ip}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>
+  ${logs.length>=80 ? `<div class="p-5 text-center text-sm text-gray-500">Shfaqen 80 regjistrimet e fundit</div>` : ''}`}
+</div>`, 'audit');
+}
+
+// ──── Auto-login if token exists ───────────────────────
+function init() {
+  const token = localStorage.getItem('edugrc-token');
+  if(token && token.startsWith('token-')){
+    const id = token.split('-')[1];
+    const user = state.users.find(u=>u.id===id);
+    if(user){
+      state.currentUser = user;
+      return Dashboard();
+    }
+  }
+  Login();
+}
+
+init();
+</script>
+</body>
+</html>

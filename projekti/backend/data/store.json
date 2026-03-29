@@ -1,0 +1,276 @@
+{
+  "config": {
+    "institutionName": "Springfield Academy",
+    "portalTitle": "Smart Policy & Compliance Portal"
+  },
+  "roles": [
+    {
+      "id": "admin",
+      "name": "Administrator",
+      "permissions": [
+        "all"
+      ]
+    },
+    {
+      "id": "manager",
+      "name": "Manager",
+      "permissions": [
+        "view_policies",
+        "approve_policies"
+      ]
+    },
+    {
+      "id": "staff",
+      "name": "Staff",
+      "permissions": [
+        "view_policies",
+        "sign_policies"
+      ]
+    },
+    {
+      "id": "student",
+      "name": "Student",
+      "permissions": [
+        "view_policies",
+        "sign_policies"
+      ]
+    },
+    {
+      "id": "auditor",
+      "name": "Auditor",
+      "permissions": [
+        "view_audit",
+        "export_logs"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "id": "6b89b968-7d76-4f16-a64b-b59f1f2693c2",
+      "name": "Dr. Sarah Johnson",
+      "email": "admin@school.edu",
+      "role": "admin",
+      "passwordHash": "76a2b6c99ccb1639a3d7150e09150021:66e889d1d67bea2a0743a60ac3d4d614802166ce751071bd474a65b7b407ca0ff98bfc8b9f9fc3e931ddb7893a0587c7e862ee5a11159bfc02566c4c8ea79e7a",
+      "active": true,
+      "createdAt": "2026-03-29T13:28:12.534Z",
+      "updatedAt": "2026-03-29T13:28:12.534Z"
+    },
+    {
+      "id": "fe3c457a-e08f-4046-8fab-2f1e1264ebf7",
+      "name": "Olivia Bennett",
+      "email": "manager@school.edu",
+      "role": "manager",
+      "passwordHash": "617dea1829499b37738fd2e381f4e381:95073b3e8159163bfe7328eaf27a3f727acc5399b5151b91dac82208bc865b2d310c9e760d585ed77433e0a0e4f925889f66c464d903933a9844b52672c12893",
+      "active": true,
+      "createdAt": "2026-03-29T13:28:12.534Z",
+      "updatedAt": "2026-03-29T13:28:12.534Z"
+    },
+    {
+      "id": "df6a91cc-b1eb-4576-b9b3-1ee9145e7cdd",
+      "name": "Mr. Robert Smith",
+      "email": "staff@school.edu",
+      "role": "staff",
+      "passwordHash": "14aa42900d0a91e8d7ec895a72ecab97:7ca2b2cdabea6bb73f91a601681b704106a648ed4883c40b2ca565a8c039e8f977e53eb9df4fabd356cf08e0f46b392c07e5523932b0d70ee0049b228a432879",
+      "active": true,
+      "createdAt": "2026-03-29T13:28:12.534Z",
+      "updatedAt": "2026-03-29T13:28:12.534Z"
+    },
+    {
+      "id": "86f7c816-955f-446a-b39f-fdba40a16d21",
+      "name": "Emily Davis",
+      "email": "student@school.edu",
+      "role": "student",
+      "passwordHash": "3e77676a9bf9c12fa87aa33fd663c571:38c9d273fa0c61a8698a68db9e3a3d868bfd3855e64d2f50ae1d619aef4fd77fff15195538e0af5ae013b7044c590d24990dbc03efcdd263c6d9d7d138b88a5c",
+      "active": true,
+      "createdAt": "2026-03-29T13:28:12.534Z",
+      "updatedAt": "2026-03-29T13:28:12.534Z"
+    },
+    {
+      "id": "3b0ff199-5639-4a03-881a-0f7cacae70e2",
+      "name": "James Wilson",
+      "email": "auditor@school.edu",
+      "role": "auditor",
+      "passwordHash": "1fae43de5727eb8159144712ab86c4e5:9781c276f6398dbb9de4b023489d06826867cb2cc9b22589314a8ab56a21fb578d658224bee8a993a7c8df84f671771b25518a273577b148232d2269d1a9fe66",
+      "active": true,
+      "createdAt": "2026-03-29T13:28:12.534Z",
+      "updatedAt": "2026-03-29T13:28:12.534Z"
+    }
+  ],
+  "policies": [
+    {
+      "id": "9a44cfc7-74ed-4e0a-8ab7-56cb88dd705d",
+      "title": "Student Code of Conduct",
+      "description": "Defines behavior, responsibilities, and reporting expectations for all enrolled students.",
+      "content": "<h2>Purpose</h2><p>This policy sets the standards for respectful, safe, and ethical conduct across all school activities.</p><h2>Expectations</h2><ul><li>Treat peers and staff with respect.</li><li>Follow classroom and campus safety procedures.</li><li>Report concerns promptly through the official channels.</li></ul><h2>Consequences</h2><p>Violations may result in corrective action, parent notification, or disciplinary review.</p>",
+      "status": "published",
+      "version": "1.0",
+      "createdAt": "2026-03-29T13:28:12.534Z",
+      "updatedAt": "2026-03-29T13:28:12.534Z",
+      "publishedAt": "2026-03-29T13:28:12.534Z",
+      "approvedAt": "2026-03-29T13:28:12.534Z",
+      "approvedBy": "6b89b968-7d76-4f16-a64b-b59f1f2693c2",
+      "createdBy": "6b89b968-7d76-4f16-a64b-b59f1f2693c2"
+    },
+    {
+      "id": "68ddb977-00c8-4e71-aec2-9f73038020a7",
+      "title": "Data Privacy and Device Usage",
+      "description": "Draft guidance for handling institutional data and using school-managed devices responsibly.",
+      "content": "<h2>Scope</h2><p>This draft applies to staff and students using institutional systems.</p><h2>Draft Controls</h2><ol><li>Use strong passwords.</li><li>Do not share confidential student information through unsecured channels.</li><li>Lock shared devices when unattended.</li></ol>",
+      "status": "published",
+      "version": "0.1",
+      "createdAt": "2026-03-29T13:28:12.534Z",
+      "updatedAt": "2026-03-29T13:28:15.032Z",
+      "publishedAt": "2026-03-29T13:28:15.032Z",
+      "approvedAt": "2026-03-29T13:28:15.007Z",
+      "approvedBy": "fe3c457a-e08f-4046-8fab-2f1e1264ebf7",
+      "createdBy": "6b89b968-7d76-4f16-a64b-b59f1f2693c2"
+    }
+  ],
+  "policyVersions": [],
+  "acknowledgements": [],
+  "auditLogs": [
+    {
+      "id": "74e3870e-36c5-49cf-96c2-512e0839603a",
+      "timestamp": "2026-03-29T13:28:14.590Z",
+      "userId": "fe3c457a-e08f-4046-8fab-2f1e1264ebf7",
+      "userName": "Olivia Bennett",
+      "userRole": "manager",
+      "action": "LOGIN",
+      "entity": "user",
+      "entityId": "fe3c457a-e08f-4046-8fab-2f1e1264ebf7",
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.26100.7920",
+      "metadata": {
+        "method": "credentials"
+      }
+    },
+    {
+      "id": "7ee699fa-cc0a-47af-8985-4caa54c796d6",
+      "timestamp": "2026-03-29T13:28:14.803Z",
+      "userId": "6b89b968-7d76-4f16-a64b-b59f1f2693c2",
+      "userName": "Dr. Sarah Johnson",
+      "userRole": "admin",
+      "action": "LOGIN",
+      "entity": "user",
+      "entityId": "6b89b968-7d76-4f16-a64b-b59f1f2693c2",
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.26100.7920",
+      "metadata": {
+        "method": "credentials"
+      }
+    },
+    {
+      "id": "5c1e1797-1375-4fdb-82f4-814fff6c22f1",
+      "timestamp": "2026-03-29T13:28:14.840Z",
+      "userId": "6b89b968-7d76-4f16-a64b-b59f1f2693c2",
+      "userName": "Dr. Sarah Johnson",
+      "userRole": "admin",
+      "action": "API_REQUEST",
+      "entity": "request",
+      "entityId": null,
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.26100.7920",
+      "metadata": {
+        "method": "GET",
+        "path": "/api/policies"
+      }
+    },
+    {
+      "id": "7e8b663d-3a33-49a6-9346-b75d216adfc0",
+      "timestamp": "2026-03-29T13:28:14.980Z",
+      "userId": "6b89b968-7d76-4f16-a64b-b59f1f2693c2",
+      "userName": "Dr. Sarah Johnson",
+      "userRole": "admin",
+      "action": "API_REQUEST",
+      "entity": "request",
+      "entityId": null,
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.26100.7920",
+      "metadata": {
+        "method": "PUT",
+        "path": "/api/policies/68ddb977-00c8-4e71-aec2-9f73038020a7"
+      }
+    },
+    {
+      "id": "ea7ab6cf-b005-46f9-9467-d7c167017f79",
+      "timestamp": "2026-03-29T13:28:14.990Z",
+      "userId": "6b89b968-7d76-4f16-a64b-b59f1f2693c2",
+      "userName": "Dr. Sarah Johnson",
+      "userRole": "admin",
+      "action": "POLICY_UPDATED",
+      "entity": "policy",
+      "entityId": "68ddb977-00c8-4e71-aec2-9f73038020a7",
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.26100.7920",
+      "metadata": {
+        "title": "Data Privacy and Device Usage",
+        "status": "review",
+        "version": "0.1"
+      }
+    },
+    {
+      "id": "88868477-2f26-41b1-a2d1-8d2de7bd61eb",
+      "timestamp": "2026-03-29T13:28:15.002Z",
+      "userId": "fe3c457a-e08f-4046-8fab-2f1e1264ebf7",
+      "userName": "Olivia Bennett",
+      "userRole": "manager",
+      "action": "API_REQUEST",
+      "entity": "request",
+      "entityId": null,
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.26100.7920",
+      "metadata": {
+        "method": "POST",
+        "path": "/api/policies/68ddb977-00c8-4e71-aec2-9f73038020a7/approve"
+      }
+    },
+    {
+      "id": "67b7c768-2fec-46f4-bbe2-59efd36c1345",
+      "timestamp": "2026-03-29T13:28:15.011Z",
+      "userId": "fe3c457a-e08f-4046-8fab-2f1e1264ebf7",
+      "userName": "Olivia Bennett",
+      "userRole": "manager",
+      "action": "POLICY_APPROVED",
+      "entity": "policy",
+      "entityId": "68ddb977-00c8-4e71-aec2-9f73038020a7",
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.26100.7920",
+      "metadata": {
+        "title": "Data Privacy and Device Usage",
+        "version": "0.1"
+      }
+    },
+    {
+      "id": "db34f790-f15d-4b6d-ad7c-9a89d780c2f0",
+      "timestamp": "2026-03-29T13:28:15.026Z",
+      "userId": "6b89b968-7d76-4f16-a64b-b59f1f2693c2",
+      "userName": "Dr. Sarah Johnson",
+      "userRole": "admin",
+      "action": "API_REQUEST",
+      "entity": "request",
+      "entityId": null,
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.26100.7920",
+      "metadata": {
+        "method": "POST",
+        "path": "/api/policies/68ddb977-00c8-4e71-aec2-9f73038020a7/publish"
+      }
+    },
+    {
+      "id": "4f5939f2-84e3-45f2-9a4f-c449e6ec1c1c",
+      "timestamp": "2026-03-29T13:28:15.036Z",
+      "userId": "6b89b968-7d76-4f16-a64b-b59f1f2693c2",
+      "userName": "Dr. Sarah Johnson",
+      "userRole": "admin",
+      "action": "POLICY_PUBLISHED",
+      "entity": "policy",
+      "entityId": "68ddb977-00c8-4e71-aec2-9f73038020a7",
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.26100.7920",
+      "metadata": {
+        "title": "Data Privacy and Device Usage",
+        "version": "0.1"
+      }
+    }
+  ]
+}

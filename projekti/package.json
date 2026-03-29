@@ -1,0 +1,9 @@
+{
+  "name": "smartpolicy-portal",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Professionalized full-stack Smart Policy portal with modular frontend and backend.",
+  "scripts": {
+    "start": "node backend/server.js"
+  }
+}
