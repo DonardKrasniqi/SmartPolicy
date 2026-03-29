@@ -1747,6 +1747,101 @@
         "method": "GET",
         "path": "/api/dashboard"
       }
+    },
+    {
+      "id": "f8e41954-bb17-4aaa-9ab2-f323b27cdd61",
+      "timestamp": "2026-03-29T13:49:54.284Z",
+      "userId": "0527c916-516e-437f-890f-047bec5891fe",
+      "userName": "James Wilson",
+      "userRole": "auditor",
+      "action": "LOGIN_DEMO",
+      "entity": "user",
+      "entityId": "0527c916-516e-437f-890f-047bec5891fe",
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0",
+      "metadata": {
+        "role": "auditor"
+      }
+    },
+    {
+      "id": "54ffa286-260e-482e-82f4-2d6f7976b7ac",
+      "timestamp": "2026-03-29T13:49:54.297Z",
+      "userId": "0527c916-516e-437f-890f-047bec5891fe",
+      "userName": "James Wilson",
+      "userRole": "auditor",
+      "action": "API_REQUEST",
+      "entity": "request",
+      "entityId": null,
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0",
+      "metadata": {
+        "method": "GET",
+        "path": "/api/dashboard"
+      }
+    },
+    {
+      "id": "0a403764-5adb-40be-9a51-a17886bc98b9",
+      "timestamp": "2026-03-29T13:50:00.904Z",
+      "userId": "0527c916-516e-437f-890f-047bec5891fe",
+      "userName": "James Wilson",
+      "userRole": "auditor",
+      "action": "API_REQUEST",
+      "entity": "request",
+      "entityId": null,
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0",
+      "metadata": {
+        "method": "GET",
+        "path": "/api/policies"
+      }
+    },
+    {
+      "id": "24e8a753-a9f9-4e66-b480-484cbe49b70c",
+      "timestamp": "2026-03-29T13:50:17.278Z",
+      "userId": "0527c916-516e-437f-890f-047bec5891fe",
+      "userName": "James Wilson",
+      "userRole": "auditor",
+      "action": "API_REQUEST",
+      "entity": "request",
+      "entityId": null,
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0",
+      "metadata": {
+        "method": "GET",
+        "path": "/api/policies"
+      }
+    },
+    {
+      "id": "eef3d476-32ad-4818-bd6a-6968dd0c93da",
+      "timestamp": "2026-03-29T13:50:18.321Z",
+      "userId": "0527c916-516e-437f-890f-047bec5891fe",
+      "userName": "James Wilson",
+      "userRole": "auditor",
+      "action": "API_REQUEST",
+      "entity": "request",
+      "entityId": null,
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0",
+      "metadata": {
+        "method": "GET",
+        "path": "/api/dashboard"
+      }
+    },
+    {
+      "id": "c7b025d0-38f9-4b16-8a94-6dafa5f8c7f9",
+      "timestamp": "2026-03-29T13:50:19.082Z",
+      "userId": "0527c916-516e-437f-890f-047bec5891fe",
+      "userName": "James Wilson",
+      "userRole": "auditor",
+      "action": "API_REQUEST",
+      "entity": "request",
+      "entityId": null,
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0",
+      "metadata": {
+        "method": "GET",
+        "path": "/api/policies/9397adc3-dc54-465e-b6d7-c6ebaf383f13"
+      }
     }
   ]
 }
