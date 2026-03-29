@@ -47,7 +47,10 @@ async function renderProtectedPage(route) {
 
 function bindAuth(mode) {
   document.querySelectorAll("[data-auth-mode]").forEach((button) => {
-    button.addEventListener("click", () => renderAuth(button.dataset.authMode));
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      renderAuth(button.dataset.authMode);
+    });
   });
 
   const loginForm = document.getElementById("login-form");
@@ -64,6 +67,7 @@ function bindAuth(mode) {
         state.roles = result.session.roles;
         state.config = result.session.config;
         go("dashboard");
+        await render();
       } catch (error) {
         showToast(error.message, "error");
       }
@@ -78,6 +82,7 @@ function bindAuth(mode) {
           state.roles = result.session.roles;
           state.config = result.session.config;
           go("dashboard");
+          await render();
         } catch (error) {
           showToast(error.message, "error");
         }
