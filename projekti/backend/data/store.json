@@ -1937,6 +1937,197 @@
         "method": "GET",
         "path": "/api/users"
       }
+    },
+    {
+      "id": "08d5564a-7e16-4103-b9b2-0a3eb98e57fe",
+      "timestamp": "2026-03-30T18:41:17.317Z",
+      "userId": "982a09ed-b329-484b-bded-465e83221454",
+      "userName": "Dr. Sarah Johnson",
+      "userRole": "admin",
+      "action": "LOGIN_DEMO",
+      "entity": "user",
+      "entityId": "982a09ed-b329-484b-bded-465e83221454",
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0",
+      "metadata": {
+        "role": "admin"
+      }
+    },
+    {
+      "id": "f0f785a0-f9cc-4005-81fd-1a6deac7f7ae",
+      "timestamp": "2026-03-30T18:41:17.408Z",
+      "userId": "982a09ed-b329-484b-bded-465e83221454",
+      "userName": "Dr. Sarah Johnson",
+      "userRole": "admin",
+      "action": "API_REQUEST",
+      "entity": "request",
+      "entityId": null,
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0",
+      "metadata": {
+        "method": "GET",
+        "path": "/api/dashboard"
+      }
+    },
+    {
+      "id": "8314cd21-f0fa-445d-8268-98f9b486f4ce",
+      "timestamp": "2026-03-30T18:41:17.553Z",
+      "userId": "982a09ed-b329-484b-bded-465e83221454",
+      "userName": "Dr. Sarah Johnson",
+      "userRole": "admin",
+      "action": "API_REQUEST",
+      "entity": "request",
+      "entityId": null,
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0",
+      "metadata": {
+        "method": "GET",
+        "path": "/api/dashboard"
+      }
+    },
+    {
+      "id": "f4c7c59d-9e1e-4f7b-b5cf-03e5ce5744cf",
+      "timestamp": "2026-03-30T18:41:20.426Z",
+      "userId": "982a09ed-b329-484b-bded-465e83221454",
+      "userName": "Dr. Sarah Johnson",
+      "userRole": "admin",
+      "action": "API_REQUEST",
+      "entity": "request",
+      "entityId": null,
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0",
+      "metadata": {
+        "method": "GET",
+        "path": "/api/policies"
+      }
+    },
+    {
+      "id": "3eb88f91-e43b-4532-8a25-13270b063d13",
+      "timestamp": "2026-03-30T18:41:28.205Z",
+      "userId": "982a09ed-b329-484b-bded-465e83221454",
+      "userName": "Dr. Sarah Johnson",
+      "userRole": "admin",
+      "action": "API_REQUEST",
+      "entity": "request",
+      "entityId": null,
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0",
+      "metadata": {
+        "method": "GET",
+        "path": "/api/users"
+      }
+    },
+    {
+      "id": "f0389e9d-7b19-4918-aea1-c66d7360010a",
+      "timestamp": "2026-03-30T18:41:32.058Z",
+      "userId": "982a09ed-b329-484b-bded-465e83221454",
+      "userName": "Dr. Sarah Johnson",
+      "userRole": "admin",
+      "action": "API_REQUEST",
+      "entity": "request",
+      "entityId": null,
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0",
+      "metadata": {
+        "method": "GET",
+        "path": "/api/policies"
+      }
+    },
+    {
+      "id": "6d9b1863-6a9e-4d14-8dc2-537a0973f128",
+      "timestamp": "2026-03-30T18:41:33.904Z",
+      "userId": "982a09ed-b329-484b-bded-465e83221454",
+      "userName": "Dr. Sarah Johnson",
+      "userRole": "admin",
+      "action": "API_REQUEST",
+      "entity": "request",
+      "entityId": null,
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0",
+      "metadata": {
+        "method": "GET",
+        "path": "/api/users"
+      }
+    },
+    {
+      "id": "c94f6fa4-d843-4a8f-8b89-81596e773f50",
+      "timestamp": "2026-03-30T18:41:37.613Z",
+      "userId": "982a09ed-b329-484b-bded-465e83221454",
+      "userName": "Dr. Sarah Johnson",
+      "userRole": "admin",
+      "action": "API_REQUEST",
+      "entity": "request",
+      "entityId": null,
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0",
+      "metadata": {
+        "method": "GET",
+        "path": "/api/policies"
+      }
+    },
+    {
+      "id": "fdf0df5c-81f0-40f3-9bd5-f6dbad6627e3",
+      "timestamp": "2026-03-30T18:41:37.830Z",
+      "userId": "982a09ed-b329-484b-bded-465e83221454",
+      "userName": "Dr. Sarah Johnson",
+      "userRole": "admin",
+      "action": "API_REQUEST",
+      "entity": "request",
+      "entityId": null,
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0",
+      "metadata": {
+        "method": "GET",
+        "path": "/api/dashboard"
+      }
+    },
+    {
+      "id": "10578152-b196-4dca-97b1-380b4d04ee7f",
+      "timestamp": "2026-03-30T18:41:38.053Z",
+      "userId": "982a09ed-b329-484b-bded-465e83221454",
+      "userName": "Dr. Sarah Johnson",
+      "userRole": "admin",
+      "action": "API_REQUEST",
+      "entity": "request",
+      "entityId": null,
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0",
+      "metadata": {
+        "method": "GET",
+        "path": "/api/dashboard"
+      }
+    },
+    {
+      "id": "0797c639-8b16-4c44-ad04-8a1ff813297f",
+      "timestamp": "2026-03-30T18:41:48.314Z",
+      "userId": "982a09ed-b329-484b-bded-465e83221454",
+      "userName": "Dr. Sarah Johnson",
+      "userRole": "admin",
+      "action": "API_REQUEST",
+      "entity": "request",
+      "entityId": null,
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0",
+      "metadata": {
+        "method": "GET",
+        "path": "/api/session"
+      }
+    },
+    {
+      "id": "628db989-df27-486e-a48d-8806ffad1b23",
+      "timestamp": "2026-03-30T18:41:48.486Z",
+      "userId": "982a09ed-b329-484b-bded-465e83221454",
+      "userName": "Dr. Sarah Johnson",
+      "userRole": "admin",
+      "action": "API_REQUEST",
+      "entity": "request",
+      "entityId": null,
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0",
+      "metadata": {
+        "method": "GET",
+        "path": "/api/dashboard"
+      }
     }
   ]
 }
