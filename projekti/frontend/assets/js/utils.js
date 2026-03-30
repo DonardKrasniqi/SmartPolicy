@@ -20,10 +20,18 @@ export function formatDateShort(value) {
   });
 }
 
+export function formatDateTimeCompact(value) {
+  return new Date(value).toLocaleString("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
 export function statusBadge(status) {
   const map = {
     draft: "muted",
     review: "warning",
+    approved: "primary",
     published: "success",
     signed: "success",
     pending: "warning",
@@ -39,6 +47,25 @@ export function initials(name = "") {
     .slice(0, 2)
     .map((part) => part[0].toUpperCase())
     .join("");
+}
+
+export function formatRoleLabel(role = "") {
+  return role.charAt(0).toUpperCase() + role.slice(1);
+}
+
+export function getHashQuery() {
+  const [, query = ""] = window.location.hash.split("?");
+  return new URLSearchParams(query);
+}
+
+export function updateHashQuery(route, nextQuery = {}) {
+  const params = new URLSearchParams();
+  Object.entries(nextQuery).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      params.set(key, String(value));
+    }
+  });
+  window.location.hash = `#/${route}${params.toString() ? `?${params.toString()}` : ""}`;
 }
 
 export function downloadText(filename, contents, type = "text/plain;charset=utf-8") {

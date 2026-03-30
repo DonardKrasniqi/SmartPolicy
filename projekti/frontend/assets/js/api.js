@@ -14,19 +14,27 @@ function clearToken() {
 
 async function request(path, options = {}) {
   const headers = {
-    "Content-Type": "application/json",
     ...(options.headers || {}),
   };
+
+  if (options.body && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
 
   const token = getToken();
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(path, {
-    ...options,
-    headers,
-  });
+  let response;
+  try {
+    response = await fetch(path, {
+      ...options,
+      headers,
+    });
+  } catch {
+    throw new Error("Unable to reach the server. Please try again.");
+  }
 
   if (response.status === 204) {
     return null;
@@ -39,7 +47,8 @@ async function request(path, options = {}) {
     if (response.status === 401) {
       clearToken();
     }
-    throw new Error(isJson ? payload.error : "Request failed");
+    const message = isJson ? payload.error : payload;
+    throw new Error(message || "Request failed");
   }
 
   return payload;

@@ -15,7 +15,8 @@ const state = {
 const app = document.getElementById("app");
 
 function getRoute() {
-  return window.location.hash.replace(/^#\//, "") || "dashboard";
+  const fullRoute = window.location.hash.replace(/^#\//, "") || "dashboard";
+  return fullRoute.split("?")[0] || "dashboard";
 }
 
 function go(route) {

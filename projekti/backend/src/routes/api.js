@@ -63,6 +63,48 @@ function getWorkflowStages(policy) {
   ];
 }
 
+function getUserName(state, userId) {
+  const user = state.users.find((item) => item.id === userId);
+  return user ? user.name : "Unknown user";
+}
+
+function buildPolicyVersionHistory(state, policyId) {
+  return state.policyVersions
+    .filter((item) => item.policyId === policyId)
+    .slice()
+    .sort((a, b) => b.archivedAt.localeCompare(a.archivedAt))
+    .map((version) => ({
+      ...version,
+      archivedByName: getUserName(state, version.archivedBy),
+    }));
+}
+
+function buildPolicyCompliance(state, policy) {
+  const applicableUsers = state.users.filter((item) => !["admin", "auditor", "manager"].includes(item.role) && item.active !== false);
+  const policyAcks = state.acknowledgements.filter((ack) => ack.policyId === policy.id);
+  const signedUserIds = new Set(policyAcks.map((ack) => ack.userId));
+  const signed = policyAcks.length;
+  const total = applicableUsers.length;
+  const percentage = total ? Math.round((signed / total) * 100) : 100;
+
+  return {
+    total,
+    signed,
+    pending: Math.max(total - signed, 0),
+    percentage,
+    isLowCompliance: percentage < 80,
+    signedUsers: applicableUsers.filter((item) => signedUserIds.has(item.id)).map((item) => {
+      const ack = policyAcks.find((entry) => entry.userId === item.id);
+      return {
+        ...publicUser(item),
+        signedAt: ack ? ack.signedAt : null,
+        policyVersion: ack ? ack.policyVersion : policy.version,
+      };
+    }),
+    pendingUsers: applicableUsers.filter((item) => !signedUserIds.has(item.id)).map((item) => publicUser(item)),
+  };
+}
+
 function buildDashboard(user) {
   const state = readStore();
   const publishedPolicies = state.policies.filter((policy) => policy.status === "published");
@@ -70,6 +112,19 @@ function buildDashboard(user) {
   const acknowledgements = state.acknowledgements;
   const activeUsers = state.users.filter((item) => item.active !== false);
   const applicableUsers = activeUsers.filter((item) => !["admin", "auditor", "manager"].includes(item.role));
+  const lowCompliancePolicies = publishedPolicies
+    .map((policy) => ({
+      id: policy.id,
+      title: policy.title,
+      version: policy.version,
+      compliance: buildPolicyCompliance(state, policy),
+    }))
+    .filter((policy) => policy.compliance.isLowCompliance)
+    .sort((a, b) => a.compliance.percentage - b.compliance.percentage);
+  const latestPublishedAt = publishedPolicies.reduce((latest, policy) => {
+    if (!policy.publishedAt) return latest;
+    return !latest || policy.publishedAt > latest ? policy.publishedAt : latest;
+  }, "");
 
   if (user.role === "admin") {
     const complianceRate =
@@ -86,6 +141,16 @@ function buildDashboard(user) {
       ],
       recentPolicies: state.policies.slice().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 4),
       recentAuditLogs: state.auditLogs.slice().sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 5),
+      lowCompliancePolicies: lowCompliancePolicies.slice(0, 5),
+      notifications: [
+        {
+          id: "review-queue",
+          kind: reviewPolicies.length ? "warning" : "success",
+          message: reviewPolicies.length
+            ? `${reviewPolicies.length} policy item(s) still need approval or publication follow-through.`
+            : "No policy approvals are currently waiting on action.",
+        },
+      ],
     };
   }
 
@@ -99,6 +164,15 @@ function buildDashboard(user) {
       ],
       recentPolicies: state.policies.slice().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 4),
       recentAuditLogs: [],
+      notifications: [
+        {
+          id: "manager-review",
+          kind: state.policies.some((policy) => policy.status === "review") ? "warning" : "success",
+          message: state.policies.some((policy) => policy.status === "review")
+            ? "Policies are waiting in review and can be approved from the policy details screen."
+            : "No policies are currently waiting for manager approval.",
+        },
+      ],
     };
   }
 
@@ -113,11 +187,22 @@ function buildDashboard(user) {
       ],
       recentPolicies: publishedPolicies.slice().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 3),
       recentAuditLogs: state.auditLogs.slice().sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 8),
+      notifications: [
+        {
+          id: "auditor-tools",
+          kind: "primary",
+          message: "Audit and reporting tools are available from the audit register.",
+        },
+      ],
     };
   }
 
   const userAcks = acknowledgements.filter((item) => item.userId === user.id);
   const pendingCount = publishedPolicies.filter((policy) => !userAcks.some((ack) => ack.policyId === policy.id)).length;
+  const newPublishedPolicies = publishedPolicies
+    .filter((policy) => !userAcks.some((ack) => ack.policyId === policy.id))
+    .filter((policy) => !latestPublishedAt || policy.publishedAt === latestPublishedAt || policy.updatedAt === latestPublishedAt)
+    .slice(0, 3);
 
   return {
     cards: [
@@ -128,6 +213,22 @@ function buildDashboard(user) {
     ],
     recentPolicies: publishedPolicies.slice().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 3),
     recentAuditLogs: [],
+    pendingCount,
+    newPublishedPolicies: newPublishedPolicies.map((policy) => ({
+      id: policy.id,
+      title: policy.title,
+      version: policy.version,
+      publishedAt: policy.publishedAt,
+    })),
+    notifications: [
+      {
+        id: "pending-acknowledgements",
+        kind: pendingCount ? "warning" : "success",
+        message: pendingCount
+          ? `You have ${pendingCount} policy acknowledgement(s) waiting in the portal.`
+          : "You are up to date on required policy acknowledgements.",
+      },
+    ],
   };
 }
 
@@ -158,24 +259,15 @@ function getPolicyDetails(user, policyId) {
 
   let compliance = null;
   if (["admin", "manager"].includes(user.role) && policy.status === "published") {
-    const applicableUsers = state.users.filter((item) => !["admin", "auditor", "manager"].includes(item.role) && item.active !== false);
-    const policyAcks = state.acknowledgements.filter((ack) => ack.policyId === policy.id);
-    const signedUserIds = new Set(policyAcks.map((ack) => ack.userId));
-
-    compliance = {
-      total: applicableUsers.length,
-      signed: policyAcks.length,
-      signedUsers: applicableUsers.filter((item) => signedUserIds.has(item.id)).map((item) => {
-        const ack = policyAcks.find((entry) => entry.userId === item.id);
-        return { ...publicUser(item), signedAt: ack ? ack.signedAt : null };
-      }),
-      pendingUsers: applicableUsers.filter((item) => !signedUserIds.has(item.id)).map((item) => publicUser(item)),
-    };
+    compliance = buildPolicyCompliance(state, policy);
   }
 
   return {
     ...policy,
     acknowledgement,
+    versionHistory: buildPolicyVersionHistory(state, policy.id),
+    createdByName: getUserName(state, policy.createdBy),
+    approvedByName: policy.approvedBy ? getUserName(state, policy.approvedBy) : null,
     canEdit: user.role === "admin",
     canApprove: hasPermission(user, "approve_policies", state.roles) && policy.status === "review",
     canPublish: user.role === "admin" && policy.status === "approved",
@@ -558,6 +650,8 @@ async function handleApiRequest(req, res) {
       const ack = {
         id: generateId(),
         policyId: policy.id,
+        policyTitle: policy.title,
+        policyVersion: policy.version,
         userId: user.id,
         userName: user.name,
         userEmail: user.email,
@@ -578,7 +672,7 @@ async function handleApiRequest(req, res) {
         entityId: ack.id,
         ipAddress: ack.ipAddress,
         userAgent: ack.userAgent,
-        metadata: { policyId: policy.id, userId: user.id },
+        metadata: { policyId: policy.id, policyVersion: policy.version, userId: user.id },
       });
       return json(res, 201, ack);
     }

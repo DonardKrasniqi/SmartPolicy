@@ -16,7 +16,7 @@ export function showModal({ title, body, actions = [] }) {
           <h3>${title}</h3>
           <button class="btn btn-secondary" data-close-modal>Close</button>
         </div>
-        <div class="muted" style="margin-top: 12px;">${body}</div>
+        <div style="margin-top: 12px;">${body}</div>
         <div class="button-row" style="margin-top: 20px;">
           ${actions
             .map(

@@ -187,6 +187,10 @@ button {
   padding: 18px 20px;
 }
 
+.policy-card__row {
+  align-items: flex-start;
+}
+
 .list-item {
   align-items: center;
   justify-content: space-between;
@@ -530,6 +534,20 @@ button {
   line-height: 1.7;
 }
 
+.modal-card .policy-content {
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.modal-card pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+}
+
 @media (max-width: 960px) {
   .auth-shell {
     grid-template-columns: 1fr;
@@ -551,6 +569,11 @@ button {
 
   .sidebar {
     padding-bottom: 16px;
+  }
+
+  .policy-card__row,
+  .list-item {
+    align-items: flex-start;
   }
 
   .grid-2,

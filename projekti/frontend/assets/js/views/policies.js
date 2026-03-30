@@ -1,5 +1,16 @@
 import { showModal } from "../components/ui.js";
-import { escapeHtml, formatDate, formatDateShort, statusBadge } from "../utils.js";
+import {
+  escapeHtml,
+  formatDate,
+  formatDateShort,
+  formatDateTimeCompact,
+  formatRoleLabel,
+  getHashQuery,
+  statusBadge,
+  updateHashQuery,
+} from "../utils.js";
+
+const ACK_STORAGE_KEY = "smartpolicy-last-acknowledgement";
 
 function renderWorkflowTracker(stages) {
   return `
@@ -15,9 +26,32 @@ function renderWorkflowTracker(stages) {
   `;
 }
 
+function saveAcknowledgementConfirmation(acknowledgement) {
+  sessionStorage.setItem(ACK_STORAGE_KEY, JSON.stringify(acknowledgement));
+}
+
+function getAcknowledgementConfirmation(policyId) {
+  const raw = sessionStorage.getItem(ACK_STORAGE_KEY);
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed.policyId === policyId ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function buildPolicyFilterState() {
+  const query = getHashQuery();
+  return {
+    status: query.get("status") || "all",
+  };
+}
+
 function renderPolicyCards(policies, state) {
   if (!policies.length) {
-    return `<div class="panel"><div class="muted">No policies are available yet.</div></div>`;
+    return `<div class="panel"><div class="muted">No policies are available for the selected filter.</div></div>`;
   }
 
   const canEdit = state.currentUser.role === "admin";
@@ -28,15 +62,17 @@ function renderPolicyCards(policies, state) {
         .map(
           (policy) => `
             <article class="policy-card">
-              <div class="list-item">
+              <div class="list-item policy-card__row">
                 <div style="flex:1;">
                   <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
                     <strong>${escapeHtml(policy.title)}</strong>
                     <span class="badge ${statusBadge(policy.status)}">${escapeHtml(policy.status)}</span>
+                    <span class="badge muted">v${escapeHtml(policy.version)}</span>
                     ${policy.signed ? `<span class="badge success">signed</span>` : ``}
+                    ${policy.versionHistory?.length ? `<span class="badge primary">${policy.versionHistory.length} archived</span>` : ``}
                   </div>
                   <div class="page-subtitle">${escapeHtml(policy.description || "No description provided.")}</div>
-                  <div class="page-subtitle">Version ${escapeHtml(policy.version)} · Updated ${formatDateShort(policy.updatedAt)}</div>
+                  <div class="page-subtitle">Updated ${formatDateShort(policy.updatedAt)}</div>
                   ${renderWorkflowTracker(policy.workflowStages || [])}
                 </div>
                 <div class="button-row">
@@ -54,7 +90,11 @@ function renderPolicyCards(policies, state) {
 
 async function renderPoliciesList({ api, state }) {
   const data = await api.getPolicies();
+  const filterState = buildPolicyFilterState();
   const canCreate = state.currentUser.role === "admin";
+  const statuses = ["all", "draft", "review", "approved", "published"];
+  const filteredPolicies =
+    filterState.status === "all" ? data.policies : data.policies.filter((policy) => policy.status === filterState.status);
 
   return {
     active: "policies",
@@ -63,13 +103,39 @@ async function renderPoliciesList({ api, state }) {
         <div class="hero-header">
           <div>
             <h1 class="page-title">Policy library</h1>
-            <p class="page-subtitle">Centralized policy documents with draft, review, approval, final publication, and acknowledgement flow.</p>
+            <p class="page-subtitle">Centralized policy documents with draft, approval, publication, acknowledgement, and version history.</p>
           </div>
           ${canCreate ? `<a class="btn btn-primary" href="#/policies/new">Create policy</a>` : ``}
         </div>
       </section>
-      ${renderPolicyCards(data.policies, state)}
+
+      <section class="panel" style="margin-bottom: 20px;">
+        <form id="policy-filter-form" class="grid-3">
+          <div class="field">
+            <label for="policy-status-filter">Status</label>
+            <select class="select" id="policy-status-filter">
+              ${statuses
+                .map(
+                  (status) =>
+                    `<option value="${status}" ${status === filterState.status ? "selected" : ""}>${
+                      status === "all" ? "All statuses" : formatRoleLabel(status)
+                    }</option>`
+                )
+                .join("")}
+            </select>
+          </div>
+        </form>
+      </section>
+
+      ${renderPolicyCards(filteredPolicies, state)}
     `,
+    bind() {
+      document.getElementById("policy-status-filter")?.addEventListener("change", () => {
+        updateHashQuery("policies", {
+          status: document.getElementById("policy-status-filter").value === "all" ? "" : document.getElementById("policy-status-filter").value,
+        });
+      });
+    },
   };
 }
 
@@ -81,6 +147,69 @@ function editorToolbar() {
       <button type="button" data-editor-command="insertUnorderedList">Bullets</button>
       <button type="button" data-editor-command="insertOrderedList">Numbers</button>
     </div>
+  `;
+}
+
+function renderVersionHistory(versionHistory) {
+  return `
+    <section class="panel" style="margin-top: 20px;">
+      <div class="section-header">
+        <div>
+          <h2 class="page-title" style="margin: 0;">Version history</h2>
+          <p class="page-subtitle">Archived snapshots captured when policy content changes.</p>
+        </div>
+        <div class="badge primary">${versionHistory.length} archived version(s)</div>
+      </div>
+      <div class="detail-stack" style="margin-top: 16px;">
+        ${
+          versionHistory.length
+            ? versionHistory
+                .map(
+                  (version, index) => `
+                    <article class="policy-card">
+                      <div class="list-item policy-card__row">
+                        <div>
+                          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                            <strong>Version ${escapeHtml(version.version)}</strong>
+                            <span class="badge muted">Archived ${formatDateShort(version.archivedAt)}</span>
+                          </div>
+                          <div class="page-subtitle">Archived by ${escapeHtml(version.archivedByName || "Unknown user")}</div>
+                          <div class="page-subtitle">${escapeHtml(version.description || "No description saved for this version.")}</div>
+                        </div>
+                        <button class="btn btn-secondary" type="button" data-version-index="${index}">View snapshot</button>
+                      </div>
+                    </article>
+                  `
+                )
+                .join("")
+            : `<div class="muted">No archived versions yet. A previous version will appear here after content is edited.</div>`
+        }
+      </div>
+    </section>
+  `;
+}
+
+function renderAcknowledgementSummary(policy, latestAcknowledgement) {
+  if (!policy.acknowledgement && !latestAcknowledgement) {
+    return "";
+  }
+
+  const signed = latestAcknowledgement || policy.acknowledgement;
+  return `
+    <section class="panel" style="margin-bottom: 20px;">
+      <div class="section-header">
+        <div>
+          <h2 class="page-title" style="margin: 0;">Acknowledgement recorded</h2>
+          <p class="page-subtitle">This policy version has already been signed and stored for audit purposes.</p>
+        </div>
+        <span class="badge success">Version ${escapeHtml(signed.policyVersion || policy.version)}</span>
+      </div>
+      <div class="detail-stack" style="margin-top: 16px;">
+        <div><strong>Signed at:</strong> ${formatDate(signed.signedAt)}</div>
+        <div><strong>Policy version:</strong> ${escapeHtml(signed.policyVersion || policy.version)}</div>
+        <div><strong>Recorded from IP:</strong> ${escapeHtml(signed.ipAddress || "Not captured")}</div>
+      </div>
+    </section>
   `;
 }
 
@@ -167,11 +296,13 @@ async function renderPolicyEditor({ api, route, showToast, go, render }) {
           if (isNew) {
             await api.createPolicy(payload);
             showToast("Policy created successfully.", "success");
-          } else {
-            await api.updatePolicy(policyId, payload);
-            showToast("Policy updated successfully.", "success");
+            go("policies");
+            return;
           }
-          go("policies");
+
+          await api.updatePolicy(policyId, payload);
+          showToast("Policy updated successfully.", "success");
+          go(`policies/${policyId}`);
         } catch (error) {
           showToast(error.message, "error");
         }
@@ -204,9 +335,10 @@ async function renderPolicyEditor({ api, route, showToast, go, render }) {
 async function renderPolicyDetails({ api, route, showToast, render, state }) {
   const policyId = route.match(/^policies\/([^/]+)$/)?.[1];
   const policy = await api.getPolicy(policyId);
-  const percentage = policy.compliance?.total
-    ? Math.round((policy.compliance.signed / policy.compliance.total) * 100)
-    : 0;
+  const percentage = policy.compliance?.percentage ?? 0;
+  const latestAcknowledgement = getAcknowledgementConfirmation(policy.id);
+  const isAdmin = state.currentUser.role === "admin";
+  const isManager = state.currentUser.role === "manager";
 
   return {
     active: "policies",
@@ -217,8 +349,13 @@ async function renderPolicyDetails({ api, route, showToast, render, state }) {
             <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
               <h1 class="page-title" style="margin:0;">${escapeHtml(policy.title)}</h1>
               <span class="badge ${statusBadge(policy.status)}">${escapeHtml(policy.status)}</span>
+              <span class="badge primary">Version ${escapeHtml(policy.version)}</span>
             </div>
-            <p class="page-subtitle">Version ${escapeHtml(policy.version)} · Updated ${formatDate(policy.updatedAt)}</p>
+            <p class="page-subtitle">
+              Created by ${escapeHtml(policy.createdByName || "Unknown user")}
+              ${policy.approvedByName ? ` • Approved by ${escapeHtml(policy.approvedByName)}` : ""}
+              • Updated ${formatDate(policy.updatedAt)}
+            </p>
             ${renderWorkflowTracker(policy.workflowStages || [])}
           </div>
           <div class="button-row">
@@ -236,36 +373,35 @@ async function renderPolicyDetails({ api, route, showToast, render, state }) {
               <div class="section-header">
                 <div>
                   <h2 class="page-title" style="margin: 0;">Compliance overview</h2>
-                  <p class="page-subtitle">${policy.compliance.signed} of ${policy.compliance.total} applicable users have signed.</p>
+                  <p class="page-subtitle">${policy.compliance.signed} of ${policy.compliance.total} applicable users have signed this version.</p>
                 </div>
-                <span class="badge success">${percentage}% complete</span>
+                <span class="badge ${policy.compliance.isLowCompliance ? "warning" : "success"}">${percentage}% complete</span>
               </div>
               <div class="progress" style="margin-top: 16px;"><span style="width: ${percentage}%"></span></div>
+              ${
+                isAdmin && policy.compliance.isLowCompliance
+                  ? `<div class="badge warning" style="margin-top: 16px;">Low compliance: ${policy.compliance.pending} user(s) still pending</div>`
+                  : ``
+              }
             </section>
           `
           : ``
       }
 
-      ${
-        policy.acknowledgement
-          ? `
-            <section class="panel" style="margin-bottom: 20px;">
-              <div class="badge success">Acknowledged</div>
-              <p class="page-subtitle">Signed on ${formatDate(policy.acknowledgement.signedAt)} from IP ${escapeHtml(policy.acknowledgement.ipAddress)}</p>
-            </section>
-          `
-          : ``
-      }
-
-      <section class="detail-card">
-        <div class="policy-content">${policy.content}</div>
-      </section>
+      ${renderAcknowledgementSummary(policy, latestAcknowledgement)}
 
       ${
         policy.canAcknowledge
           ? `
-            <section class="panel" style="margin-top: 20px;">
-              <label style="display:flex; gap:12px; align-items:flex-start;">
+            <section class="panel" style="margin-bottom: 20px;">
+              <div class="section-header">
+                <div>
+                  <h2 class="page-title" style="margin: 0;">Acknowledge this policy</h2>
+                  <p class="page-subtitle">You are signing version ${escapeHtml(policy.version)}. Your confirmation will be stored with a timestamp for audit review.</p>
+                </div>
+                <span class="badge primary">Version ${escapeHtml(policy.version)}</span>
+              </div>
+              <label style="display:flex; gap:12px; align-items:flex-start; margin-top:16px;">
                 <input type="checkbox" id="acknowledge-check" />
                 <span>I have read, understood, and agree to comply with this policy. My acknowledgement will be stored for audit purposes.</span>
               </label>
@@ -274,6 +410,10 @@ async function renderPolicyDetails({ api, route, showToast, render, state }) {
           `
           : ``
       }
+
+      <section class="detail-card">
+        <div class="policy-content">${policy.content}</div>
+      </section>
 
       ${
         policy.compliance
@@ -287,9 +427,12 @@ async function renderPolicyDetails({ api, route, showToast, render, state }) {
                       ? policy.compliance.signedUsers
                           .map(
                             (user) => `
-                              <div class="list-item">
-                                <span>${escapeHtml(user.name)}</span>
-                                <span class="page-subtitle">${formatDateShort(user.signedAt)}</span>
+                              <div class="list-item policy-card__row">
+                                <div>
+                                  <span>${escapeHtml(user.name)}</span>
+                                  <div class="page-subtitle">${escapeHtml(formatRoleLabel(user.role))}</div>
+                                </div>
+                                <div class="page-subtitle">Signed ${formatDateShort(user.signedAt)} • v${escapeHtml(user.policyVersion || policy.version)}</div>
                               </div>
                             `
                           )
@@ -306,9 +449,9 @@ async function renderPolicyDetails({ api, route, showToast, render, state }) {
                       ? policy.compliance.pendingUsers
                           .map(
                             (user) => `
-                              <div class="list-item">
+                              <div class="list-item policy-card__row">
                                 <span>${escapeHtml(user.name)}</span>
-                                <span class="page-subtitle">${escapeHtml(user.role)}</span>
+                                <span class="page-subtitle">${escapeHtml(formatRoleLabel(user.role))}</span>
                               </div>
                             `
                           )
@@ -321,6 +464,8 @@ async function renderPolicyDetails({ api, route, showToast, render, state }) {
           `
           : ``
       }
+
+      ${(isAdmin || isManager || state.currentUser.role === "auditor") ? renderVersionHistory(policy.versionHistory || []) : ``}
     `,
     bind() {
       const checkbox = document.getElementById("acknowledge-check");
@@ -331,8 +476,10 @@ async function renderPolicyDetails({ api, route, showToast, render, state }) {
         });
         button.addEventListener("click", async () => {
           try {
-            await api.acknowledgePolicy(policy.id);
-            showToast("Policy acknowledged successfully.", "success");
+            const acknowledgement = await api.acknowledgePolicy(policy.id);
+            saveAcknowledgementConfirmation(acknowledgement);
+            state.currentUser.pendingCount = Math.max(Number(state.currentUser.pendingCount || 1) - 1, 0);
+            showToast(`Acknowledged version ${acknowledgement.policyVersion}.`, "success");
             await render();
           } catch (error) {
             showToast(error.message, "error");
@@ -358,6 +505,24 @@ async function renderPolicyDetails({ api, route, showToast, render, state }) {
               },
             },
           ],
+        });
+      });
+
+      document.querySelectorAll("[data-version-index]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const version = policy.versionHistory[Number(button.dataset.versionIndex)];
+          showModal({
+            title: `${policy.title} • Version ${version.version}`,
+            body: `
+              <div class="detail-stack">
+                <div class="page-subtitle">Archived ${formatDateTimeCompact(version.archivedAt)} by ${escapeHtml(version.archivedByName || "Unknown user")}</div>
+                <div class="page-subtitle">${escapeHtml(version.description || "No description saved for this version.")}</div>
+                <div class="detail-card" style="padding: 18px; margin-top: 12px;">
+                  <div class="policy-content">${version.content}</div>
+                </div>
+              </div>
+            `,
+          });
         });
       });
     },
