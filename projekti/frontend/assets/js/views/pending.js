@@ -1,5 +1,17 @@
 import { escapeHtml, formatDateShort } from "../utils.js";
 
+function renderEmptyState({ title, message }) {
+  return `
+    <div class="empty-state">
+      <div class="empty-state__icon">i</div>
+      <div>
+        <strong>${escapeHtml(title)}</strong>
+        <div class="page-subtitle">${escapeHtml(message)}</div>
+      </div>
+    </div>
+  `;
+}
+
 export async function renderPending({ api, state }) {
   if (!["staff", "student"].includes(state.currentUser.role)) {
     return {
@@ -15,8 +27,9 @@ export async function renderPending({ api, state }) {
     active: "pending",
     content: `
       <section class="hero">
-        <h1 class="page-title">Pending acknowledgements</h1>
-        <p class="page-subtitle">Track the policy versions you still need to review and the acknowledgements already recorded for you.</p>
+        <div class="eyebrow">Acknowledgements</div>
+        <h1 class="page-title">Acknowledge policies</h1>
+        <p class="page-subtitle">Track policy versions still awaiting your acknowledgement and review the ones already recorded.</p>
       </section>
 
       <section class="card-grid">
@@ -39,20 +52,23 @@ export async function renderPending({ api, state }) {
                 ? data.pending
                     .map(
                       (policy) => `
-                        <div class="policy-card">
+                        <div class="policy-card policy-card--neutral">
                           <div class="list-item">
                             <div>
                               <strong>${escapeHtml(policy.title)}</strong>
                               <div class="page-subtitle">${escapeHtml(policy.description || "No description provided.")}</div>
-                              <div class="page-subtitle">Version ${escapeHtml(policy.version)} • Published ${formatDateShort(policy.publishedAt || policy.updatedAt)}</div>
+                              <div class="page-subtitle">Version ${escapeHtml(policy.version)} - Published ${formatDateShort(policy.publishedAt || policy.updatedAt)}</div>
                             </div>
-                            <a class="btn btn-primary" href="#/policies/${policy.id}">Review</a>
+                            <a class="btn btn-primary" href="#/policies/${policy.id}">Acknowledge policy</a>
                           </div>
                         </div>
                       `
                     )
                     .join("")
-                : `<div class="muted">You are fully up to date.</div>`
+                : renderEmptyState({
+                    title: "No pending acknowledgements",
+                    message: "You are fully up to date on required policy acknowledgements.",
+                  })
             }
           </div>
         </article>
@@ -65,14 +81,17 @@ export async function renderPending({ api, state }) {
                 ? data.signed
                     .map(
                       (policy) => `
-                        <div class="policy-card">
+                        <div class="policy-card policy-card--neutral">
                           <strong>${escapeHtml(policy.title)}</strong>
-                          <div class="page-subtitle">Version ${escapeHtml(policy.acknowledgement.policyVersion || policy.version)} • Signed on ${formatDateShort(policy.acknowledgement.signedAt)}</div>
+                          <div class="page-subtitle">Version ${escapeHtml(policy.acknowledgement.policyVersion || policy.version)} - Acknowledged on ${formatDateShort(policy.acknowledgement.signedAt)}</div>
                         </div>
                       `
                     )
                     .join("")
-                : `<div class="muted">Signed policies will appear here.</div>`
+                : renderEmptyState({
+                    title: "No completed acknowledgements",
+                    message: "Acknowledged policies will appear here after you confirm them.",
+                  })
             }
           </div>
         </article>

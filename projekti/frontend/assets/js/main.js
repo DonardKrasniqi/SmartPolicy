@@ -14,6 +14,42 @@ const state = {
 
 const app = document.getElementById("app");
 
+function renderLoadingShell(message = "Loading portal data...") {
+  app.innerHTML = renderLayout({
+    state,
+    active: getRoute(),
+    content: `
+      <section class="loading-card">
+        <div class="eyebrow">Loading</div>
+        <div class="skeleton title"></div>
+        <div class="skeleton medium"></div>
+        <div class="skeleton long"></div>
+        <div class="page-subtitle">${message}</div>
+      </section>
+    `,
+  });
+  attachLayoutHandlers();
+}
+
+function renderInlineError(message) {
+  app.innerHTML = renderLayout({
+    state,
+    active: getRoute(),
+    content: `
+      <section class="error-state">
+        <div class="error-state__icon">!</div>
+        <div>
+          <strong>Unable to load this page</strong>
+          <div class="page-subtitle">${message}</div>
+        </div>
+        <button class="btn btn-primary" id="retry-render-button">Try again</button>
+      </section>
+    `,
+  });
+  attachLayoutHandlers();
+  document.getElementById("retry-render-button")?.addEventListener("click", render);
+}
+
 function getRoute() {
   const fullRoute = window.location.hash.replace(/^#\//, "") || "dashboard";
   return fullRoute.split("?")[0] || "dashboard";
@@ -136,6 +172,7 @@ async function render() {
   }
 
   try {
+    renderLoadingShell("Loading your dashboard and workflow data...");
     await renderProtectedPage(getRoute());
   } catch (error) {
     if (!api.getToken()) {
@@ -146,6 +183,7 @@ async function render() {
     }
 
     showToast(error.message, "error");
+    renderInlineError(error.message || "The requested data is currently unavailable.");
   }
 }
 
