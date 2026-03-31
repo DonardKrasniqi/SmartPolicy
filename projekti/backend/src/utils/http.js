@@ -1,7 +1,12 @@
 async function readBody(req) {
   const chunks = [];
+  let size = 0;
 
   for await (const chunk of req) {
+    size += chunk.length;
+    if (size > 1024 * 1024) {
+      throw new Error("Request body too large.");
+    }
     chunks.push(chunk);
   }
 
@@ -10,7 +15,17 @@ async function readBody(req) {
   }
 
   const raw = Buffer.concat(chunks).toString("utf8");
-  return raw ? JSON.parse(raw) : {};
+  if (!raw) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const error = new Error("Invalid JSON payload.");
+    error.statusCode = 400;
+    throw error;
+  }
 }
 
 function json(res, statusCode, payload) {

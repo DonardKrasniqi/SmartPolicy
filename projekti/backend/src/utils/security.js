@@ -55,7 +55,9 @@ function verifyToken(token, secret) {
     .update(body)
     .digest("base64url");
 
-  if (signature !== expected) {
+  const providedBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+  if (providedBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(providedBuffer, expectedBuffer)) {
     return null;
   }
 

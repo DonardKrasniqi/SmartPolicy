@@ -124,6 +124,112 @@ function createInitialState() {
   };
 }
 
+function normalizePolicyVersions(state) {
+  if (!Array.isArray(state.policyVersions)) {
+    state.policyVersions = [];
+  }
+
+  state.policyVersions = state.policyVersions.map((version) => ({
+    id: version.id || generateId(),
+    policyId: version.policyId,
+    version: String(version.version || "1.0"),
+    title: String(version.title || ""),
+    description: String(version.description || ""),
+    content: String(version.content || ""),
+    archivedAt: version.archivedAt || new Date().toISOString(),
+    archivedBy: version.archivedBy || null,
+    changeType: ["minor", "major"].includes(version.changeType) ? version.changeType : "minor",
+    changeSummary: String(version.changeSummary || ""),
+  }));
+}
+
+function normalizeAcknowledgements(state) {
+  if (!Array.isArray(state.acknowledgements)) {
+    state.acknowledgements = [];
+  }
+
+  state.acknowledgements = state.acknowledgements.map((ack) => {
+    const policy = state.policies.find((item) => item.id === ack.policyId);
+    return {
+      id: ack.id || generateId(),
+      policyId: ack.policyId,
+      policyTitle: String(ack.policyTitle || policy?.title || ""),
+      policyVersion: String(ack.policyVersion || policy?.version || "1.0"),
+      userId: ack.userId,
+      userName: String(ack.userName || ""),
+      userEmail: String(ack.userEmail || ""),
+      ipAddress: String(ack.ipAddress || "127.0.0.1"),
+      userAgent: String(ack.userAgent || ""),
+      signedAt: ack.signedAt || new Date().toISOString(),
+      evidence: {
+        recordedAt: ack.evidence?.recordedAt || ack.signedAt || new Date().toISOString(),
+        source: ack.evidence?.source || "portal-ui",
+        policySnapshotVersion: String(ack.evidence?.policySnapshotVersion || ack.policyVersion || policy?.version || "1.0"),
+      },
+      auditLogId: ack.auditLogId || null,
+    };
+  });
+}
+
+function normalizeAuditLogs(state) {
+  if (!Array.isArray(state.auditLogs)) {
+    state.auditLogs = [];
+  }
+
+  state.auditLogs = state.auditLogs.map((log) => ({
+    id: log.id || generateId(),
+    timestamp: log.timestamp || new Date().toISOString(),
+    userId: log.userId || null,
+    userName: String(log.userName || "Anonymous"),
+    userRole: String(log.userRole || "guest"),
+    action: String(log.action || "UNKNOWN"),
+    entity: String(log.entity || "unknown"),
+    entityId: log.entityId || null,
+    ipAddress: String(log.ipAddress || "127.0.0.1"),
+    userAgent: String(log.userAgent || ""),
+    metadata: log.metadata && typeof log.metadata === "object" ? log.metadata : {},
+  }));
+}
+
+function normalizePolicies(state) {
+  if (!Array.isArray(state.policies)) {
+    state.policies = [];
+  }
+
+  state.policies = state.policies.map((policy) => ({
+    ...policy,
+    description: String(policy.description || ""),
+    version: String(policy.version || "1.0"),
+    createdAt: policy.createdAt || new Date().toISOString(),
+    updatedAt: policy.updatedAt || new Date().toISOString(),
+    publishedAt: policy.publishedAt || null,
+    approvedAt: policy.approvedAt || null,
+    approvedBy: policy.approvedBy || null,
+    createdBy: policy.createdBy || null,
+  }));
+}
+
+function normalizeStoreShape(state) {
+  if (!state.config || typeof state.config !== "object") {
+    state.config = createInitialState().config;
+  }
+
+  if (!Array.isArray(state.roles) || !state.roles.length) {
+    state.roles = buildRoles();
+  }
+
+  if (!Array.isArray(state.users)) {
+    state.users = [];
+  }
+
+  normalizePolicies(state);
+  normalizePolicyVersions(state);
+  normalizeAcknowledgements(state);
+  normalizeAuditLogs(state);
+
+  return state;
+}
+
 function ensureStoreFile() {
   const dir = path.dirname(dataFile);
   if (!fs.existsSync(dir)) {
@@ -136,7 +242,7 @@ function ensureStoreFile() {
   }
 
   try {
-    const existing = JSON.parse(fs.readFileSync(dataFile, "utf8"));
+    const existing = normalizeStoreShape(JSON.parse(fs.readFileSync(dataFile, "utf8")));
     const needsReset =
       !Array.isArray(existing.users) ||
       existing.users.length === 0 ||
@@ -145,7 +251,10 @@ function ensureStoreFile() {
 
     if (needsReset) {
       fs.writeFileSync(dataFile, JSON.stringify(createInitialState(), null, 2), "utf8");
+      return;
     }
+
+    fs.writeFileSync(dataFile, JSON.stringify(existing, null, 2), "utf8");
   } catch {
     fs.writeFileSync(dataFile, JSON.stringify(createInitialState(), null, 2), "utf8");
   }
@@ -153,12 +262,12 @@ function ensureStoreFile() {
 
 function readStore() {
   ensureStoreFile();
-  return JSON.parse(fs.readFileSync(dataFile, "utf8"));
+  return normalizeStoreShape(JSON.parse(fs.readFileSync(dataFile, "utf8")));
 }
 
 function writeStore(state) {
   ensureStoreFile();
-  fs.writeFileSync(dataFile, JSON.stringify(state, null, 2), "utf8");
+  fs.writeFileSync(dataFile, JSON.stringify(normalizeStoreShape(state), null, 2), "utf8");
 }
 
 function updateStore(updater) {

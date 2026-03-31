@@ -17,6 +17,12 @@ npm start
 
 Open [http://localhost:3000](http://localhost:3000).
 
+Optional environment variables:
+
+- `TOKEN_SECRET` custom token signing secret
+- `TOKEN_TTL_SECONDS` token lifetime in seconds
+- `APP_NAME` custom application name
+
 ## Demo credentials
 
 - Admin: `admin@school.edu` / `admin123`
@@ -44,3 +50,5 @@ You can also use the demo login buttons on the sign-in screen.
 ## Note
 
 The live app currently runs on the local JSON store for zero-setup use. The Prisma/PostgreSQL scaffold was added to align the codebase with the Word document, but dependency installation and production database provisioning were not performed in this sandboxed session.
+
+See `docs/security-note.md` for the current security measures, known limitations, and production follow-up recommendations.

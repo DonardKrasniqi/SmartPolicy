@@ -141,32 +141,56 @@
     {
       "id": "455aff8c-01e9-4b85-a888-6ac73f87230d",
       "policyId": "023866f8-232e-43b5-95b9-aa2f519a70a5",
+      "policyTitle": "Student Code of Conduct",
+      "policyVersion": "1.0",
       "userId": "b07f5072-64da-4934-945b-93cc0587deef",
       "userName": "Mr. Robert Smith",
       "userEmail": "staff@school.edu",
       "ipAddress": "::1",
       "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0",
-      "signedAt": "2026-03-29T13:37:36.271Z"
+      "signedAt": "2026-03-29T13:37:36.271Z",
+      "evidence": {
+        "recordedAt": "2026-03-29T13:37:36.271Z",
+        "source": "portal-ui",
+        "policySnapshotVersion": "1.0"
+      },
+      "auditLogId": null
     },
     {
       "id": "e30cc5d2-6a13-49c5-a0f7-3c285f278ef0",
       "policyId": "023866f8-232e-43b5-95b9-aa2f519a70a5",
+      "policyTitle": "Student Code of Conduct",
+      "policyVersion": "1.0",
       "userId": "f3fe890e-c5b6-4a1a-913c-33050aac7302",
       "userName": "Emily Davis",
       "userEmail": "student@school.edu",
       "ipAddress": "::1",
       "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0",
-      "signedAt": "2026-03-29T13:49:03.740Z"
+      "signedAt": "2026-03-29T13:49:03.740Z",
+      "evidence": {
+        "recordedAt": "2026-03-29T13:49:03.740Z",
+        "source": "portal-ui",
+        "policySnapshotVersion": "1.0"
+      },
+      "auditLogId": null
     },
     {
       "id": "3a0eff5e-f993-4dbf-a8bf-1829689c1f34",
       "policyId": "9397adc3-dc54-465e-b6d7-c6ebaf383f13",
+      "policyTitle": "Data Privacy and Device Usage",
+      "policyVersion": "0.1",
       "userId": "f3fe890e-c5b6-4a1a-913c-33050aac7302",
       "userName": "Emily Davis",
       "userEmail": "student@school.edu",
       "ipAddress": "::1",
       "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0",
-      "signedAt": "2026-03-29T13:49:11.041Z"
+      "signedAt": "2026-03-29T13:49:11.041Z",
+      "evidence": {
+        "recordedAt": "2026-03-29T13:49:11.041Z",
+        "source": "portal-ui",
+        "policySnapshotVersion": "0.1"
+      },
+      "auditLogId": null
     }
   ],
   "auditLogs": [
@@ -2116,6 +2140,53 @@
     {
       "id": "628db989-df27-486e-a48d-8806ffad1b23",
       "timestamp": "2026-03-30T18:41:48.486Z",
+      "userId": "982a09ed-b329-484b-bded-465e83221454",
+      "userName": "Dr. Sarah Johnson",
+      "userRole": "admin",
+      "action": "API_REQUEST",
+      "entity": "request",
+      "entityId": null,
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0",
+      "metadata": {
+        "method": "GET",
+        "path": "/api/dashboard"
+      }
+    },
+    {
+      "id": "c2f4c8df-0d9b-4561-ad7c-d4d84b807231",
+      "timestamp": "2026-03-30T18:54:17.103Z",
+      "userId": "982a09ed-b329-484b-bded-465e83221454",
+      "userName": "Dr. Sarah Johnson",
+      "userRole": "admin",
+      "action": "LOGIN_DEMO",
+      "entity": "user",
+      "entityId": "982a09ed-b329-484b-bded-465e83221454",
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0",
+      "metadata": {
+        "role": "admin"
+      }
+    },
+    {
+      "id": "ad283f49-a026-4b21-b89b-48f133d46a49",
+      "timestamp": "2026-03-30T18:54:17.223Z",
+      "userId": "982a09ed-b329-484b-bded-465e83221454",
+      "userName": "Dr. Sarah Johnson",
+      "userRole": "admin",
+      "action": "API_REQUEST",
+      "entity": "request",
+      "entityId": null,
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0",
+      "metadata": {
+        "method": "GET",
+        "path": "/api/dashboard"
+      }
+    },
+    {
+      "id": "2256875d-6365-4ca4-a709-3630c55da1f1",
+      "timestamp": "2026-03-30T18:54:17.298Z",
       "userId": "982a09ed-b329-484b-bded-465e83221454",
       "userName": "Dr. Sarah Johnson",
       "userRole": "admin",

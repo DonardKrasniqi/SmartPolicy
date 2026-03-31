@@ -50,20 +50,26 @@ model PolicyVersion {
   content     String
   archivedAt  DateTime @default(now())
   archivedBy  String?
+  changeType  String   @default("minor")
+  changeSummary String @default("")
   policy      Policy   @relation(fields: [policyId], references: [id], onDelete: Restrict)
 }
 
 model Acknowledgement {
-  id         String   @id @default(uuid())
-  policyId    String
-  userId      String
-  userName    String
-  userEmail   String
-  ipAddress   String
-  userAgent   String
-  signedAt    DateTime @default(now())
-  policy      Policy   @relation(fields: [policyId], references: [id], onDelete: Restrict)
-  user        User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  id            String   @id @default(uuid())
+  policyId      String
+  policyTitle   String
+  policyVersion String
+  userId        String
+  userName      String
+  userEmail     String
+  ipAddress     String
+  userAgent     String
+  signedAt      DateTime @default(now())
+  evidence      Json
+  auditLogId    String?
+  policy        Policy   @relation(fields: [policyId], references: [id], onDelete: Restrict)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Restrict)
 }
 
 model AuditLog {

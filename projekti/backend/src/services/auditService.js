@@ -10,6 +10,7 @@ function recordAudit({
   userAgent = "",
   metadata = {},
 }) {
+  const safeMetadata = metadata && typeof metadata === "object" ? metadata : {};
   const entry = {
     id: generateId(),
     timestamp: new Date().toISOString(),
@@ -21,7 +22,7 @@ function recordAudit({
     entityId,
     ipAddress,
     userAgent,
-    metadata,
+    metadata: safeMetadata,
   };
 
   updateStore((state) => {
