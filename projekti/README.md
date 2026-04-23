@@ -30,7 +30,7 @@ Open [http://localhost:3000](http://localhost:3000).
 5. **Node version**: use **22.x** (see `package.json` `engines`) so the built-in `node:sqlite` module is available to API routes.
 6. **Environment variables** (recommended in production): set `TOKEN_SECRET` to a long random string, and `DEMO_MODE=0` if you do not want unauthenticated demo login.
 
-**Note:** The SQLite database is stored in serverless **temporary** storage on Vercel (see `VERCEL` in `backend/src/config.js`). Data is not durable across all deployments; for a real production app, use a hosted database. The API is exposed via [`api/[[...slug]].js`](api/[[...slug]].js); the `npm start` server in `backend/server.js` is for local use only.
+**Note:** The SQLite database is stored in serverless **temporary** storage on Vercel (see `VERCEL` in `backend/src/config.js`). Data is not durable across all deployments; for a real production app, use a hosted database. The API is exposed via the catch-all [`api/[...path].js`](api/[...path].js). Do not add rewrites in `vercel.json` that point `/` or `/assets` at `/frontend/...` when the project **Output** is already `frontend` (that double-prefixes paths and can break the site). The `npm start` server in `backend/server.js` is for local use only.
 
 ### Data storage
 
