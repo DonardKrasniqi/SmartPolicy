@@ -131,20 +131,26 @@ export async function renderDashboard({ api, state }) {
               <div class="policy-list" style="margin-top: 16px;">
                 ${data.lowCompliancePolicies
                   .map(
-                    (policy) => `
+                    (policy) => {
+                      const pct = policy.percentage != null ? policy.percentage : policy.compliance?.percentage || 0;
+                      const signed = policy.signed != null ? policy.signed : policy.compliance?.signed || 0;
+                      const total = policy.total != null ? policy.total : policy.compliance?.total || 0;
+                      const title = policy.policyTitle || policy.title || "Policy";
+                      return `
                       <div class="policy-card policy-card--highlight">
                         <div class="list-item policy-card__row">
                           <div>
-                            <strong>${escapeHtml(policy.title)}</strong>
-                            <div class="page-subtitle">Version ${escapeHtml(policy.version)} - ${policy.compliance.signed}/${policy.compliance.total} acknowledged</div>
+                            <strong>${escapeHtml(title)}</strong>
+                            <div class="page-subtitle">Version ${escapeHtml(policy.version || "")} - ${signed}/${total} acknowledged</div>
                           </div>
                           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                            <span class="badge warning">${policy.compliance.percentage}% complete</span>
-                            <a class="btn btn-secondary" href="#/policies/${policy.id}">View compliance</a>
+                            <span class="badge warning">${pct}% complete</span>
+                            <a class="btn btn-secondary" href="#/policies/${policy.policyId || policy.id}">View compliance</a>
                           </div>
                         </div>
                       </div>
-                    `
+                    `;
+                    }
                   )
                   .join("")}
               </div>

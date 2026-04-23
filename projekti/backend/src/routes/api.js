@@ -1,6 +1,6 @@
-const { tokenSecret, tokenTtlSeconds } = require("../config");
+const { tokenSecret, tokenTtlSeconds, demoMode } = require("../config");
 const { readStore, updateStore, publicUser } = require("../store");
-const { verifyPassword, signToken, verifyToken, hashPassword } = require("../utils/security");
+const { signToken, verifyToken } = require("../utils/security");
 const { generateId } = require("../utils/ids");
 const { readBody, json, text, getTokenFromRequest, getClientIp } = require("../utils/http");
 const { recordAudit } = require("../services/auditService");
@@ -9,8 +9,18 @@ const {
   validatePolicyPayload,
   validateRegisterPayload,
   validateRolePayload,
+  validateUserActivePayload,
   normalizeString,
 } = require("../utils/validation");
+
+/** Deterministic seed accounts for demo login (avoids `find(role)` when multiple users share a role). */
+const DEMO_ROLE_EMAIL = {
+  admin: "admin@school.edu",
+  manager: "manager@school.edu",
+  staff: "staff@school.edu",
+  student: "student@school.edu",
+  auditor: "auditor@school.edu",
+};
 
 function hasPermission(user, permission, roles) {
   if (!user) return false;
@@ -240,10 +250,6 @@ function buildDashboard(user) {
   const reviewPolicies = state.policies.filter((policy) => ["review", "approved"].includes(policy.status));
   const activeUsers = state.users.filter((item) => item.active !== false);
   const complianceReport = buildComplianceReport(state);
-  const latestPublishedAt = publishedPolicies.reduce((latest, policy) => {
-    if (!policy.publishedAt) return latest;
-    return !latest || policy.publishedAt > latest ? policy.publishedAt : latest;
-  }, "");
 
   if (user.role === "admin") {
     return {
@@ -314,7 +320,8 @@ function buildDashboard(user) {
   const pendingCount = countUserPendingAcknowledgements(state, user);
   const newPublishedPolicies = publishedPolicies
     .filter((policy) => !getUserAcknowledgementForCurrentVersion(state, policy.id, user.id))
-    .filter((policy) => !latestPublishedAt || policy.publishedAt === latestPublishedAt || policy.updatedAt === latestPublishedAt)
+    .filter((policy) => policy.publishedAt)
+    .sort((a, b) => String(b.publishedAt).localeCompare(String(a.publishedAt)))
     .slice(0, 3);
 
   return {
@@ -494,7 +501,10 @@ async function handleApiRequest(req, res) {
       if (!body.ok) return json(res, 400, { error: body.error });
 
       const state = readStore();
-      const user = state.users.find((item) => item.email.toLowerCase() === body.value.email && verifyPassword(body.value.password, item.passwordHash));
+      const user = state.users.find(
+        (item) =>
+          item.email.toLowerCase() === body.value.email && item.password === body.value.password && item.active !== false
+      );
 
       if (!user) {
         recordAudit({
@@ -505,7 +515,7 @@ async function handleApiRequest(req, res) {
           userAgent: req.headers["user-agent"] || "",
           metadata: { email: body.value.email },
         });
-        return json(res, 401, { error: "Invalid email or password." });
+        return json(res, 401, { error: "Invalid email or password, or the account is inactive." });
       }
 
       const token = signToken({ userId: user.id }, tokenSecret, tokenTtlSeconds);
@@ -522,10 +532,17 @@ async function handleApiRequest(req, res) {
     }
 
     if (req.method === "POST" && pathname === "/api/auth/demo-login") {
+      if (!demoMode) {
+        return json(res, 403, { error: "Demo login is disabled (DEMO_MODE=0)." });
+      }
       const body = await readBody(req);
       const requestedRole = normalizeString(body.role);
+      const email = DEMO_ROLE_EMAIL[requestedRole];
+      if (!email) {
+        return json(res, 400, { error: "Invalid demo role." });
+      }
       const state = readStore();
-      const user = state.users.find((item) => item.role === requestedRole);
+      const user = state.users.find((item) => item.email.toLowerCase() === email.toLowerCase() && item.active !== false);
       if (!user) return json(res, 404, { error: "Demo user not found." });
 
       const token = signToken({ userId: user.id }, tokenSecret, tokenTtlSeconds);
@@ -558,7 +575,7 @@ async function handleApiRequest(req, res) {
           name: body.value.name,
           email: body.value.email,
           role: body.value.role,
-          passwordHash: hashPassword(body.value.password),
+          password: body.value.password,
           active: true,
           createdAt: now,
           updatedAt: now,
@@ -696,12 +713,24 @@ async function handleApiRequest(req, res) {
         if (index === -1) return state;
 
         const existing = state.policies[index];
+        let nextStatus;
+        if (["approved", "published"].includes(existing.status)) {
+          nextStatus = existing.status;
+        } else {
+          const requested = payload.value.status === "published" ? "review" : payload.value.status;
+          nextStatus = ["draft", "review"].includes(requested) ? requested : existing.status;
+        }
+
         const contentChanged =
           existing.title !== payload.value.title ||
           existing.description !== payload.value.description ||
           existing.content !== payload.value.content;
 
-        if (contentChanged) {
+        const bump = payload.value.versionBump;
+        let nextVersion = existing.version;
+
+        if (contentChanged && bump !== "none") {
+          const changeType = bump === "major" ? "major" : "minor";
           state.policyVersions.push({
             id: generateId(),
             policyId: existing.id,
@@ -711,13 +740,12 @@ async function handleApiRequest(req, res) {
             content: existing.content,
             archivedAt: now,
             archivedBy: user.id,
-            changeType: payload.value.versionBump,
-            changeSummary: `Content updated with a ${payload.value.versionBump} version increment.`,
+            changeType,
+            changeSummary: `Content updated with a ${changeType} version increment.`,
           });
+          nextVersion = incrementVersion(existing.version, changeType);
         }
 
-        const nextVersion = contentChanged ? incrementVersion(existing.version, payload.value.versionBump) : existing.version;
-        const nextStatus = payload.value.status === "published" ? "review" : payload.value.status;
         updatedPolicy = {
           ...existing,
           title: payload.value.title,
@@ -726,10 +754,22 @@ async function handleApiRequest(req, res) {
           status: nextStatus,
           version: nextVersion,
           updatedAt: now,
-          approvedAt: nextStatus === "approved" ? existing.approvedAt : null,
-          approvedBy: nextStatus === "approved" ? existing.approvedBy : null,
-          publishedAt: nextStatus === "published" ? existing.publishedAt : null,
         };
+
+        if (["draft", "review"].includes(nextStatus)) {
+          updatedPolicy.approvedAt = null;
+          updatedPolicy.approvedBy = null;
+          updatedPolicy.publishedAt = null;
+        } else if (nextStatus === "approved") {
+          updatedPolicy.approvedAt = existing.approvedAt;
+          updatedPolicy.approvedBy = existing.approvedBy;
+          updatedPolicy.publishedAt = null;
+        } else if (nextStatus === "published") {
+          updatedPolicy.approvedAt = existing.approvedAt;
+          updatedPolicy.approvedBy = existing.approvedBy;
+          updatedPolicy.publishedAt = existing.publishedAt;
+        }
+
         state.policies[index] = updatedPolicy;
         return state;
       });
@@ -854,11 +894,6 @@ async function handleApiRequest(req, res) {
         auditLogId: null,
       };
 
-      updateStore((nextState) => {
-        nextState.acknowledgements.push(ack);
-        return nextState;
-      });
-
       const auditEntry = recordAudit({
         user,
         action: "POLICY_ACKNOWLEDGED",
@@ -875,15 +910,11 @@ async function handleApiRequest(req, res) {
         },
       });
 
+      ack.auditLogId = auditEntry.id;
       updateStore((nextState) => {
-        const index = nextState.acknowledgements.findIndex((item) => item.id === ack.id);
-        if (index >= 0) {
-          nextState.acknowledgements[index].auditLogId = auditEntry.id;
-        }
+        nextState.acknowledgements.push(ack);
         return nextState;
       });
-
-      ack.auditLogId = auditEntry.id;
       return json(res, 201, ack);
     }
 
@@ -902,14 +933,14 @@ async function handleApiRequest(req, res) {
 
     if (req.method === "GET" && pathname === "/api/reports/compliance") {
       const state = readStore();
-      requirePermission(user, "view_audit", state.roles, "You do not have access to compliance reports.");
+      requireRole(user, ["admin", "manager", "auditor"], "You do not have access to compliance reports.");
       return json(res, 200, buildComplianceReport(state));
     }
 
     const compliancePolicyMatch = pathname.match(/^\/api\/reports\/compliance\/policies\/([^/]+)$/);
     if (req.method === "GET" && compliancePolicyMatch) {
       const state = readStore();
-      requirePermission(user, "view_audit", state.roles, "You do not have access to compliance reports.");
+      requireRole(user, ["admin", "manager", "auditor"], "You do not have access to compliance reports.");
       const policy = state.policies.find((item) => item.id === compliancePolicyMatch[1]);
       if (!policy) return json(res, 404, { error: "Policy not found." });
       return json(res, 200, { summary: buildPolicyCompliance(state, policy) });
@@ -951,6 +982,40 @@ async function handleApiRequest(req, res) {
         ipAddress: getClientIp(req),
         userAgent: req.headers["user-agent"] || "",
         metadata: { userName: updatedUser.name, oldRole: previousRole, newRole: rolePayload.value.role },
+      });
+      return json(res, 200, publicUser(updatedUser));
+    }
+
+    const userActiveMatch = pathname.match(/^\/api\/users\/([^/]+)\/active$/);
+    if (req.method === "PATCH" && userActiveMatch) {
+      requireRole(user, ["admin"]);
+      if (userActiveMatch[1] === user.id) {
+        return json(res, 400, { error: "You cannot change the active state of your own account from here." });
+      }
+
+      const activePayload = validateUserActivePayload(await readBody(req));
+      if (!activePayload.ok) return json(res, 400, { error: activePayload.error });
+
+      const now = new Date().toISOString();
+      let updatedUser = null;
+      updateStore((state) => {
+        const index = state.users.findIndex((item) => item.id === userActiveMatch[1]);
+        if (index === -1) return state;
+        updatedUser = { ...state.users[index], active: activePayload.value.active, updatedAt: now };
+        state.users[index] = updatedUser;
+        return state;
+      });
+
+      if (!updatedUser) return json(res, 404, { error: "User not found." });
+
+      recordAudit({
+        user,
+        action: "USER_ACTIVE_CHANGED",
+        entity: "user",
+        entityId: updatedUser.id,
+        ipAddress: getClientIp(req),
+        userAgent: req.headers["user-agent"] || "",
+        metadata: { userName: updatedUser.name, active: activePayload.value.active },
       });
       return json(res, 200, publicUser(updatedUser));
     }

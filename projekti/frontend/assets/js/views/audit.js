@@ -1,8 +1,8 @@
-import { downloadText, escapeHtml, formatDate } from "../utils.js";
+import { downloadText, escapeHtml, formatDate, getHashQuery, updateHashQuery } from "../utils.js";
 import { showModal } from "../components/ui.js";
 
 function buildAuditQueryFromUrl() {
-  const params = new URLSearchParams(window.location.search);
+  const params = getHashQuery();
   return {
     q: params.get("q") || "",
     date: params.get("date") || "",
@@ -12,13 +12,11 @@ function buildAuditQueryFromUrl() {
 }
 
 function updateAuditQuery(nextQuery) {
-  const params = new URLSearchParams();
-  if (nextQuery.q) params.set("q", nextQuery.q);
-  if (nextQuery.date) params.set("date", nextQuery.date);
-  if (nextQuery.page && nextQuery.page > 1) params.set("page", String(nextQuery.page));
-  const query = params.toString();
-  const nextUrl = `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`;
-  window.history.replaceState({}, "", nextUrl);
+  updateHashQuery("audit", {
+    q: nextQuery.q || "",
+    date: nextQuery.date || "",
+    page: nextQuery.page && nextQuery.page > 1 ? String(nextQuery.page) : "",
+  });
 }
 
 function renderEmptyState({ title, message }) {

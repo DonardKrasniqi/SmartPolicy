@@ -1,8 +1,105 @@
 const fs = require("fs");
 const path = require("path");
-const { dataFile } = require("./config");
+const { DatabaseSync } = require("node:sqlite");
+const { dbFile } = require("./config");
 const { generateId } = require("./utils/ids");
-const { hashPassword } = require("./utils/security");
+
+let dbInstance = null;
+
+function getDb() {
+  if (!dbInstance) {
+    const dir = path.dirname(dbFile);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    dbInstance = new DatabaseSync(dbFile, { enableForeignKeyConstraints: true });
+    try {
+      dbInstance.exec("PRAGMA journal_mode = WAL;");
+    } catch {
+      /* ignore */
+    }
+    migrate(dbInstance);
+    seedIfEmpty(dbInstance);
+  }
+  return dbInstance;
+}
+
+function migrate(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS app_config (
+      key TEXT PRIMARY KEY NOT NULL,
+      value TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS roles (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      permissions_json TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL UNIQUE,
+      role TEXT NOT NULL,
+      password TEXT NOT NULL,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS policies (
+      id TEXT PRIMARY KEY NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL,
+      content TEXT NOT NULL,
+      status TEXT NOT NULL,
+      version TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      published_at TEXT,
+      approved_at TEXT,
+      approved_by TEXT,
+      created_by TEXT
+    );
+    CREATE TABLE IF NOT EXISTS policy_versions (
+      id TEXT PRIMARY KEY NOT NULL,
+      policy_id TEXT NOT NULL,
+      version TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL,
+      content TEXT NOT NULL,
+      archived_at TEXT NOT NULL,
+      archived_by TEXT,
+      change_type TEXT NOT NULL,
+      change_summary TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS acknowledgements (
+      id TEXT PRIMARY KEY NOT NULL,
+      policy_id TEXT NOT NULL,
+      policy_title TEXT NOT NULL,
+      policy_version TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      user_name TEXT NOT NULL,
+      user_email TEXT NOT NULL,
+      ip_address TEXT NOT NULL,
+      user_agent TEXT NOT NULL,
+      signed_at TEXT NOT NULL,
+      evidence_json TEXT NOT NULL,
+      audit_log_id TEXT
+    );
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id TEXT PRIMARY KEY NOT NULL,
+      timestamp TEXT NOT NULL,
+      user_id TEXT,
+      user_name TEXT NOT NULL,
+      user_role TEXT NOT NULL,
+      action TEXT NOT NULL,
+      entity TEXT NOT NULL,
+      entity_id TEXT,
+      ip_address TEXT NOT NULL,
+      user_agent TEXT NOT NULL,
+      metadata_json TEXT NOT NULL
+    );
+  `);
+}
 
 function buildRoles() {
   return [
@@ -14,59 +111,20 @@ function buildRoles() {
   ];
 }
 
-function seedUsers(now) {
+function seedUsersPlain(now) {
   return [
-    {
-      id: generateId(),
-      name: "Dr. Sarah Johnson",
-      email: "admin@school.edu",
-      role: "admin",
-      passwordHash: hashPassword("admin123"),
-      active: true,
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: generateId(),
-      name: "Olivia Bennett",
-      email: "manager@school.edu",
-      role: "manager",
-      passwordHash: hashPassword("manager123"),
-      active: true,
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: generateId(),
-      name: "Mr. Robert Smith",
-      email: "staff@school.edu",
-      role: "staff",
-      passwordHash: hashPassword("staff123"),
-      active: true,
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: generateId(),
-      name: "Emily Davis",
-      email: "student@school.edu",
-      role: "student",
-      passwordHash: hashPassword("student123"),
-      active: true,
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: generateId(),
-      name: "James Wilson",
-      email: "auditor@school.edu",
-      role: "auditor",
-      passwordHash: hashPassword("auditor123"),
-      active: true,
-      createdAt: now,
-      updatedAt: now,
-    },
-  ];
+    { name: "Dr. Sarah Johnson", email: "admin@school.edu", role: "admin", password: "admin123" },
+    { name: "Olivia Bennett", email: "manager@school.edu", role: "manager", password: "manager123" },
+    { name: "Mr. Robert Smith", email: "staff@school.edu", role: "staff", password: "staff123" },
+    { name: "Emily Davis", email: "student@school.edu", role: "student", password: "student123" },
+    { name: "James Wilson", email: "auditor@school.edu", role: "auditor", password: "auditor123" },
+  ].map((u) => ({
+    id: generateId(),
+    ...u,
+    active: true,
+    createdAt: now,
+    updatedAt: now,
+  }));
 }
 
 function seedPolicies(users, now) {
@@ -108,7 +166,7 @@ function seedPolicies(users, now) {
 
 function createInitialState() {
   const now = new Date().toISOString();
-  const users = seedUsers(now);
+  const users = seedUsersPlain(now);
 
   return {
     config: {
@@ -230,51 +288,317 @@ function normalizeStoreShape(state) {
   return state;
 }
 
-function ensureStoreFile() {
-  const dir = path.dirname(dataFile);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+function rowToUser(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    role: row.role,
+    password: row.password,
+    active: row.active !== 0,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function readStoreFromDb(db) {
+  const configRows = db.prepare("SELECT key, value FROM app_config").all();
+  const config = {};
+  for (const row of configRows) {
+    config[row.key] = row.value;
   }
 
-  if (!fs.existsSync(dataFile)) {
-    fs.writeFileSync(dataFile, JSON.stringify(createInitialState(), null, 2), "utf8");
+  const roles = db
+    .prepare("SELECT id, name, permissions_json AS permissionsJson FROM roles")
+    .all()
+    .map((r) => ({
+      id: r.id,
+      name: r.name,
+      permissions: JSON.parse(r.permissionsJson),
+    }));
+
+  const users = db.prepare("SELECT * FROM users").all().map(rowToUser);
+
+  const policies = db
+    .prepare("SELECT * FROM policies")
+    .all()
+    .map((row) => ({
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      content: row.content,
+      status: row.status,
+      version: row.version,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      publishedAt: row.published_at,
+      approvedAt: row.approved_at,
+      approvedBy: row.approved_by,
+      createdBy: row.created_by,
+    }));
+
+  const policyVersions = db
+    .prepare("SELECT * FROM policy_versions")
+    .all()
+    .map((row) => ({
+      id: row.id,
+      policyId: row.policy_id,
+      version: row.version,
+      title: row.title,
+      description: row.description,
+      content: row.content,
+      archivedAt: row.archived_at,
+      archivedBy: row.archived_by,
+      changeType: row.change_type,
+      changeSummary: row.change_summary,
+    }));
+
+  const acknowledgements = db
+    .prepare("SELECT * FROM acknowledgements")
+    .all()
+    .map((row) => ({
+      id: row.id,
+      policyId: row.policy_id,
+      policyTitle: row.policy_title,
+      policyVersion: row.policy_version,
+      userId: row.user_id,
+      userName: row.user_name,
+      userEmail: row.user_email,
+      ipAddress: row.ip_address,
+      userAgent: row.user_agent,
+      signedAt: row.signed_at,
+      evidence: JSON.parse(row.evidence_json),
+      auditLogId: row.audit_log_id,
+    }));
+
+  const auditLogs = db
+    .prepare("SELECT * FROM audit_logs")
+    .all()
+    .map((row) => ({
+      id: row.id,
+      timestamp: row.timestamp,
+      userId: row.user_id,
+      userName: row.user_name,
+      userRole: row.user_role,
+      action: row.action,
+      entity: row.entity,
+      entityId: row.entity_id,
+      ipAddress: row.ip_address,
+      userAgent: row.user_agent,
+      metadata: JSON.parse(row.metadata_json),
+    }));
+
+  return normalizeStoreShape({
+    config,
+    roles,
+    users,
+    policies,
+    policyVersions,
+    acknowledgements,
+    auditLogs,
+  });
+}
+
+function writeStateToDb(db, state) {
+  const normalized = normalizeStoreShape(JSON.parse(JSON.stringify(state)));
+
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare("DELETE FROM acknowledgements").run();
+    db.prepare("DELETE FROM policy_versions").run();
+    db.prepare("DELETE FROM policies").run();
+    db.prepare("DELETE FROM audit_logs").run();
+    db.prepare("DELETE FROM users").run();
+    db.prepare("DELETE FROM roles").run();
+    db.prepare("DELETE FROM app_config").run();
+
+    const insConfig = db.prepare("INSERT INTO app_config (key, value) VALUES (?, ?)");
+    insConfig.run("institutionName", normalized.config.institutionName || "");
+    insConfig.run("portalTitle", normalized.config.portalTitle || "");
+
+    const insRole = db.prepare("INSERT INTO roles (id, name, permissions_json) VALUES (?, ?, ?)");
+    for (const role of normalized.roles) {
+      insRole.run(role.id, role.name, JSON.stringify(role.permissions || []));
+    }
+
+    const insUser = db.prepare(
+      `INSERT INTO users (id, name, email, role, password, active, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    for (const u of normalized.users) {
+      insUser.run(u.id, u.name, u.email, u.role, u.password, u.active === false ? 0 : 1, u.createdAt, u.updatedAt);
+    }
+
+    const insPol = db.prepare(
+      `INSERT INTO policies (id, title, description, content, status, version, created_at, updated_at, published_at, approved_at, approved_by, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    for (const p of normalized.policies) {
+      insPol.run(
+        p.id,
+        p.title,
+        p.description,
+        p.content,
+        p.status,
+        p.version,
+        p.createdAt,
+        p.updatedAt,
+        p.publishedAt,
+        p.approvedAt,
+        p.approvedBy,
+        p.createdBy
+      );
+    }
+
+    const insVer = db.prepare(
+      `INSERT INTO policy_versions (id, policy_id, version, title, description, content, archived_at, archived_by, change_type, change_summary)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    for (const v of normalized.policyVersions) {
+      insVer.run(
+        v.id,
+        v.policyId,
+        v.version,
+        v.title,
+        v.description,
+        v.content,
+        v.archivedAt,
+        v.archivedBy,
+        v.changeType,
+        v.changeSummary
+      );
+    }
+
+    const insAck = db.prepare(
+      `INSERT INTO acknowledgements (id, policy_id, policy_title, policy_version, user_id, user_name, user_email, ip_address, user_agent, signed_at, evidence_json, audit_log_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    for (const a of normalized.acknowledgements) {
+      insAck.run(
+        a.id,
+        a.policyId,
+        a.policyTitle,
+        a.policyVersion,
+        a.userId,
+        a.userName,
+        a.userEmail,
+        a.ipAddress,
+        a.userAgent,
+        a.signedAt,
+        JSON.stringify(a.evidence || {}),
+        a.auditLogId
+      );
+    }
+
+    const insAudit = db.prepare(
+      `INSERT INTO audit_logs (id, timestamp, user_id, user_name, user_role, action, entity, entity_id, ip_address, user_agent, metadata_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    for (const log of normalized.auditLogs) {
+      insAudit.run(
+        log.id,
+        log.timestamp,
+        log.userId,
+        log.userName,
+        log.userRole,
+        log.action,
+        log.entity,
+        log.entityId,
+        log.ipAddress,
+        log.userAgent,
+        JSON.stringify(log.metadata || {})
+      );
+    }
+
+    db.exec("COMMIT");
+  } catch (err) {
+    try {
+      db.exec("ROLLBACK");
+    } catch {
+      /* ignore */
+    }
+    throw err;
+  }
+}
+
+function seedIfEmpty(db) {
+  const row = db.prepare("SELECT COUNT(*) AS c FROM users").get();
+  if (row.c > 0) {
     return;
   }
 
-  try {
-    const existing = normalizeStoreShape(JSON.parse(fs.readFileSync(dataFile, "utf8")));
-    const needsReset =
-      !Array.isArray(existing.users) ||
-      existing.users.length === 0 ||
-      !existing.users.some((user) => user.role === "manager") ||
-      existing.users.some((user) => typeof user.passwordHash !== "string" || !user.passwordHash.includes(":"));
-
-    if (needsReset) {
-      fs.writeFileSync(dataFile, JSON.stringify(createInitialState(), null, 2), "utf8");
-      return;
-    }
-
-    fs.writeFileSync(dataFile, JSON.stringify(existing, null, 2), "utf8");
-  } catch {
-    fs.writeFileSync(dataFile, JSON.stringify(createInitialState(), null, 2), "utf8");
-  }
+  const state = createInitialState();
+  writeStateToDb(db, state);
 }
 
 function readStore() {
-  ensureStoreFile();
-  return normalizeStoreShape(JSON.parse(fs.readFileSync(dataFile, "utf8")));
+  const db = getDb();
+  return readStoreFromDb(db);
 }
 
 function writeStore(state) {
-  ensureStoreFile();
-  fs.writeFileSync(dataFile, JSON.stringify(normalizeStoreShape(state), null, 2), "utf8");
+  const db = getDb();
+  writeStateToDb(db, state);
 }
 
 function updateStore(updater) {
-  const state = readStore();
+  const db = getDb();
+  const state = readStoreFromDb(db);
   const nextState = updater(state) || state;
-  writeStore(nextState);
+  writeStateToDb(db, nextState);
   return nextState;
+}
+
+/**
+ * Append a single audit row without rewriting the full database.
+ * Must stay consistent with writeStateToDb audit row shape.
+ */
+function insertAuditLog(entry) {
+  const db = getDb();
+  const log = {
+    id: entry.id || generateId(),
+    timestamp: entry.timestamp || new Date().toISOString(),
+    userId: entry.userId ?? null,
+    userName: String(entry.userName || "Anonymous"),
+    userRole: String(entry.userRole || "guest"),
+    action: String(entry.action || "UNKNOWN"),
+    entity: String(entry.entity || "unknown"),
+    entityId: entry.entityId ?? null,
+    ipAddress: String(entry.ipAddress || "127.0.0.1"),
+    userAgent: String(entry.userAgent || ""),
+    metadata: entry.metadata && typeof entry.metadata === "object" ? entry.metadata : {},
+  };
+
+  db.prepare(
+    `INSERT INTO audit_logs (id, timestamp, user_id, user_name, user_role, action, entity, entity_id, ip_address, user_agent, metadata_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    log.id,
+    log.timestamp,
+    log.userId,
+    log.userName,
+    log.userRole,
+    log.action,
+    log.entity,
+    log.entityId,
+    log.ipAddress,
+    log.userAgent,
+    JSON.stringify(log.metadata)
+  );
+
+  return {
+    id: log.id,
+    timestamp: log.timestamp,
+    userId: log.userId,
+    userName: log.userName,
+    userRole: log.userRole,
+    action: log.action,
+    entity: log.entity,
+    entityId: log.entityId,
+    ipAddress: log.ipAddress,
+    userAgent: log.userAgent,
+    metadata: log.metadata,
+  };
 }
 
 function publicUser(user) {
@@ -282,7 +606,7 @@ function publicUser(user) {
     return null;
   }
 
-  const { passwordHash, ...rest } = user;
+  const { password, ...rest } = user;
   return rest;
 }
 
@@ -291,4 +615,5 @@ module.exports = {
   writeStore,
   updateStore,
   publicUser,
+  insertAuditLog,
 };

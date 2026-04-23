@@ -104,6 +104,9 @@ export const api = {
   changeUserRole(id, role) {
     return request(`/api/users/${id}/role`, { method: "PATCH", body: JSON.stringify({ role }) });
   },
+  changeUserActive(id, active) {
+    return request(`/api/users/${id}/active`, { method: "PATCH", body: JSON.stringify({ active }) });
+  },
   getAuditLogs(params = {}) {
     const query = new URLSearchParams();
     if (params.q) query.set("q", params.q);

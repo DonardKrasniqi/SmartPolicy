@@ -256,6 +256,38 @@ async function renderPolicyEditor({ api, route, showToast, go, render }) {
   const isNew = route === "policies/new";
   const policyId = isNew ? null : route.match(/^policies\/([^/]+)\/edit$/)?.[1];
   const policy = isNew ? null : await api.getPolicy(policyId);
+  const statusLocked = policy && ["approved", "published"].includes(policy.status);
+  const statusField = statusLocked
+    ? `
+            <div class="field">
+              <label>Workflow status</label>
+              <div><span class="badge ${statusBadge(policy.status)}">${escapeHtml(policy.status)}</span></div>
+              <input type="hidden" id="policy-status" value="${escapeHtml(policy.status)}" />
+              <p class="page-subtitle">Use Approve and Publish on the policy page to move the workflow. Editing content does not change status here.</p>
+            </div>
+          `
+    : `
+            <div class="field">
+              <label for="policy-status">Status</label>
+              <select class="select" id="policy-status">
+                <option value="draft" ${policy?.status === "draft" ? "selected" : ""}>Draft</option>
+                <option value="review" ${policy?.status === "review" ? "selected" : ""}>Send to review</option>
+              </select>
+            </div>
+          `;
+  const versionBumpField = !isNew
+    ? `
+          <div class="field">
+            <label for="policy-version-bump">Version change (content updates)</label>
+            <select class="select" id="policy-version-bump">
+              <option value="none">No version bump (typos and minor text fixes only)</option>
+              <option value="minor" selected>Minor version bump (material edits)</option>
+              <option value="major">Major version bump (substantive change)</option>
+            </select>
+            <p class="page-subtitle">A minor/major bump archives the previous content snapshot for audit.</p>
+          </div>
+        `
+    : "";
 
   return {
     active: "policies",
@@ -278,15 +310,9 @@ async function renderPolicyEditor({ api, route, showToast, go, render }) {
               <label for="policy-title">Policy title</label>
               <input class="input" id="policy-title" value="${escapeHtml(policy?.title || "")}" required />
             </div>
-            <div class="field">
-              <label for="policy-status">Status</label>
-              <select class="select" id="policy-status">
-                <option value="draft" ${policy?.status === "draft" ? "selected" : ""}>Draft</option>
-                <option value="review" ${policy?.status === "review" ? "selected" : ""}>Review</option>
-                <option value="approved" ${policy?.status === "approved" ? "selected" : ""}>Approved</option>
-              </select>
-            </div>
+            ${statusField}
           </div>
+          ${versionBumpField}
 
           <div class="field">
             <label for="policy-description">Description</label>
@@ -330,6 +356,7 @@ async function renderPolicyEditor({ api, route, showToast, go, render }) {
           description: document.getElementById("policy-description").value,
           status: document.getElementById("policy-status").value,
           content: document.getElementById("policy-content").innerHTML,
+          versionBump: document.getElementById("policy-version-bump") ? document.getElementById("policy-version-bump").value : "minor",
         };
 
         try {

@@ -1,24 +1,25 @@
-# Security Note
+# Security Note (demo / show build)
 
-## Implemented Measures
+## Implemented measures
 
-- Passwords are stored with `scrypt` hashing and verified with timing-safe comparison.
-- Tokens are HMAC-signed and now read their secret and lifetime from environment variables when provided.
-- Request payloads are validated for login, registration, role changes, and policy updates.
-- Policy HTML is sanitized before storage to remove scripts, inline event handlers, `javascript:` URLs, and embedded active content.
-- Acknowledgements now store the exact policy version signed, basic evidence metadata, and a linked audit log id.
-- Audit log filters now support policy, user, role, action, entity, and date filtering for clearer reporting.
+- Session tokens are HMAC-SHA256 signed; use `TOKEN_SECRET` and `TOKEN_TTL_SECONDS` in the environment.
+- Request payloads are validated for login, registration, role and active state changes, and policy updates.
+- Policy HTML is sanitized before storage to reduce scripts, inline handlers, and dangerous URLs.
+- Acknowledgements store the policy version, basic evidence metadata, and a link to the audit log entry where applicable.
+- Demo login is gated by `DEMO_MODE=0` (set this to disable `/api/auth/demo-login` in shared environments).
+- The server logs a warning when the default `TOKEN_SECRET` is used.
 
-## Project-Appropriate Limitations
+## Show-build limitations (not production safe)
 
-- The application still uses a local JSON store rather than a transactional database.
-- The HTML sanitization is intentionally lightweight and suitable for a school project, not a full production-grade sanitizer.
-- Tokens are custom signed strings rather than a full session management platform with refresh tokens and revocation lists.
-- No rate limiting, CSRF protection, secure cookie strategy, or centralized secrets manager is implemented.
+- **Passwords in SQLite** are stored as **plaintext** in `users.password` so a jury or reviewer can open `backend/data/smartpolicy.db` and see credentials. This is intentional for the classroom/showcase only.
+- The Node.js built-in **SQLite** integration (`node:sqlite`) is still flagged **experimental**; behavior may change in future Node versions.
+- The UI stores the bearer token in `localStorage` (XSS can steal it); there is no CSRF or cookie-based hardening.
+- There is no rate limiting, account lockout, or centralized secrets management.
+- The optional **Prisma/PostgreSQL** files under `prisma/` are not the runtime data layer in this build.
 
-## Production Improvements
+## If you take this to production
 
-- Move fully to PostgreSQL with Prisma migrations and relational constraints enforced in production.
-- Replace lightweight HTML sanitization with a dedicated, battle-tested sanitizer.
-- Add rate limiting, account lockout protection, refresh-token rotation, and secret rotation support.
-- Add structured audit retention rules, immutable evidence storage, and stronger reporting exports.
+- Enforce **hashed** passwords (e.g. scrypt/argon2), never plaintext, and add password policies.
+- Move to a managed or self-hosted RDBMS with proper backups, RLS, and least-privilege app accounts.
+- Use a hardened session strategy (httpOnly cookies, CSRF, refresh rotation) and a battle-tested sanitizer.
+- Add rate limits, security headers, and abuse monitoring; disable demo login and open registration on public instances.

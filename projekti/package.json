@@ -5,5 +5,8 @@
   "description": "Professionalized full-stack Smart Policy portal with modular frontend and backend.",
   "scripts": {
     "start": "node backend/server.js"
+  },
+  "engines": {
+    "node": ">=22.5.0"
   }
 }

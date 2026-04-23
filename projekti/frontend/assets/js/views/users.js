@@ -57,7 +57,10 @@ export async function renderUsers({ api, showToast, render, state }) {
                       ${
                         user.id === state.currentUser.id
                           ? `<span class="muted">Current user</span>`
-                          : `<button class="btn btn-secondary" data-role-user="${user.id}" data-current-role="${user.role}">Change role</button>`
+                          : `<div class="button-row" style="flex-wrap:wrap;">
+                              <button class="btn btn-secondary" data-role-user="${user.id}" data-current-role="${user.role}">Change role</button>
+                              <button class="btn ${user.active === false ? "btn-primary" : "btn-secondary"}" data-toggle-active="${user.id}" data-active="${user.active !== false}">${user.active === false ? "Activate" : "Deactivate"}</button>
+                            </div>`
                       }
                     </td>
                   </tr>
@@ -100,6 +103,21 @@ export async function renderUsers({ api, showToast, render, state }) {
               },
             ],
           });
+        });
+      });
+
+      document.querySelectorAll("[data-toggle-active]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const userId = button.dataset.toggleActive;
+          const isActive = button.dataset.active === "true";
+          const next = !isActive;
+          try {
+            await api.changeUserActive(userId, next);
+            showToast(next ? "User activated." : "User deactivated.", "success");
+            await render();
+          } catch (error) {
+            showToast(error.message, "error");
+          }
         });
       });
     },

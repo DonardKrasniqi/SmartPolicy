@@ -1,5 +1,5 @@
 const { generateId } = require("../utils/ids");
-const { updateStore } = require("../store");
+const { insertAuditLog } = require("../store");
 
 function recordAudit({
   user,
@@ -25,12 +25,7 @@ function recordAudit({
     metadata: safeMetadata,
   };
 
-  updateStore((state) => {
-    state.auditLogs.push(entry);
-    return state;
-  });
-
-  return entry;
+  return insertAuditLog(entry);
 }
 
 module.exports = {

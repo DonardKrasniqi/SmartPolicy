@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const http = require("http");
-const { port, frontendRoot, appName } = require("./src/config");
+const { port, frontendRoot, appName, isDefaultTokenSecret } = require("./src/config");
 const { handleApiRequest } = require("./src/routes/api");
 const { text } = require("./src/utils/http");
 const { readStore } = require("./src/store");
@@ -48,4 +48,7 @@ http
   })
   .listen(port, () => {
     console.log(`${appName} is running at http://localhost:${port}`);
+    if (isDefaultTokenSecret) {
+      console.warn("[SmartPolicy] Using default TOKEN_SECRET. Set TOKEN_SECRET in the environment for untrusted networks.");
+    }
   });

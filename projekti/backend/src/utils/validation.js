@@ -82,6 +82,13 @@ function validateRolePayload(payload) {
   return { ok: true, value: { role } };
 }
 
+function validateUserActivePayload(payload) {
+  if (typeof payload?.active !== "boolean") {
+    return { ok: false, error: "Field active must be true or false." };
+  }
+  return { ok: true, value: { active: payload.active } };
+}
+
 module.exports = {
   VALID_POLICY_STATUSES,
   VALID_USER_ROLES,
@@ -91,4 +98,5 @@ module.exports = {
   validateRegisterPayload,
   validatePolicyPayload,
   validateRolePayload,
+  validateUserActivePayload,
 };
