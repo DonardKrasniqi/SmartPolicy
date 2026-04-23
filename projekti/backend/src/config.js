@@ -1,11 +1,19 @@
 const path = require("path");
+const os = require("os");
 
 const defaultTokenSecret = "school-project-dev-secret-change-me";
 
+function resolveDbFile() {
+  if (process.env.VERCEL) {
+    return path.join(os.tmpdir(), "smartpolicy.db");
+  }
+  return path.join(__dirname, "..", "data", "smartpolicy.db");
+}
+
 module.exports = {
   port: Number(process.env.PORT || 3000),
-  /** Local SQLite database file (demo runtime store). */
-  dbFile: path.join(__dirname, "..", "data", "smartpolicy.db"),
+  /** Local SQLite file; on Vercel, stored under OS temp (ephemeral, resets between cold starts). */
+  dbFile: resolveDbFile(),
   frontendRoot: path.join(__dirname, "..", "..", "frontend"),
   tokenSecret: process.env.TOKEN_SECRET || defaultTokenSecret,
   tokenTtlSeconds: Number(process.env.TOKEN_TTL_SECONDS || 60 * 60 * 8),
